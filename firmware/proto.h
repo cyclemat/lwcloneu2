@@ -40,6 +40,16 @@
  *                                                  3 Pins ab idx: p = Port (0=A..10=L), b = Bit | 0x80 wenn ADC-fähig
  *                                                  p = 0xFF wenn kein Pin mehr / if no more pins
  *
+ *  WS2811/WS2812-Strip (strip.c), nur in STRIP_MODE_DIRECT wirksam / LED strip, STRIP_MODE_DIRECT only:
+ *  B0   STRIP_INFO   [B0]                     → [B0, count, max_pixels, mode, order, 0, 0, 0]
+ *  B1   STRIP_SET    [B1, idx, r, g, b, r, g, b]   2 Pixel ab idx setzen (nur Puffer) / set 2 pixels (buffer only)
+ *  B2   STRIP_FILL   [B2, idx, n, r, g, b]         n Pixel ab idx füllen, n = 0: bis zum Ende / fill, 0 = to the end
+ *  B3   STRIP_SHOW   [B3]                     → [B3, status]   Puffer an den Strip senden; die Antwort kommt,
+ *                                                  sobald der Strip geschrieben ist – vor der nächsten
+ *                                                  Pixel-Folge darauf warten (Brücke Mega/Uno: UART-Puffer).
+ *                                                  send buffer to the strip; the reply arrives once the strip
+ *                                                  has been written – wait for it before the next pixel burst.
+ *
  *  status: 0 = ok, 1 = ungültig / invalid, 2 = Fehler / error
  */
 
@@ -49,9 +59,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define PROTO_VERSION      1
+#define PROTO_VERSION      2
 #define FW_VERSION_MAJOR   2
-#define FW_VERSION_MINOR   0
+#define FW_VERSION_MINOR   1
 
 enum {
 	CMD_SBA          = 64,
@@ -69,6 +79,14 @@ enum {
 
 	CMD_CFG_FIRST    = 0xA0,
 	CMD_CFG_LAST     = 0xAF,
+
+	CMD_STRIP_INFO   = 0xB0,
+	CMD_STRIP_SET    = 0xB1,
+	CMD_STRIP_FILL   = 0xB2,
+	CMD_STRIP_SHOW   = 0xB3,
+
+	CMD_STRIP_FIRST  = 0xB0,
+	CMD_STRIP_LAST   = 0xBF,
 };
 
 enum {
@@ -79,12 +97,19 @@ enum {
 
 #define PROTO_REPORT_SIZE 8
 
-/* Ist das ein Konfigurationsbefehl (statt LED-Wiz-Daten)? / is this a configuration command? */
-static inline bool proto_is_cfg_cmd(uint8_t b0) { return b0 >= CMD_CFG_FIRST && b0 <= CMD_CFG_LAST; }
+/* Ist das ein Konfigurations-/Strip-Befehl (statt LED-Wiz-Daten)? Antworten tragen denselben
+ * Befehlscode in Byte 0 – die Brücke (main_usb.c) erkennt sie daran.
+ * Is this a configuration/strip command (instead of LED-Wiz data)? Replies carry the same command
+ * code in byte 0 – the bridge (main_usb.c) recognizes them by it. */
+static inline bool proto_is_cfg_cmd(uint8_t b0) { return b0 >= CMD_CFG_FIRST && b0 <= CMD_STRIP_LAST; }
 
 /* Report auf dem MCU verarbeiten, der Ausgänge und Konfiguration besitzt.
  * Process a report on the MCU that owns outputs and configuration. */
 void proto_handle_report(const uint8_t *p8);
+
+/* Antwort (8 Byte) einreihen – für Module, die verzögert antworten (strip.c)
+ * queue a reply (8 bytes) – for modules that reply later (strip.c) */
+void proto_push_reply(const uint8_t *p8);
 
 /* Nächste Antwort (8 Byte) holen, false wenn keine / fetch next reply, false if none */
 bool proto_pop_reply(uint8_t *dst8);

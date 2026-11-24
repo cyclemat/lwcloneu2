@@ -21,7 +21,7 @@
  *
  *  - Brücke (ATmega16U2/8U2 auf Mega/Uno, DATA_TX_UART_vect definiert): Dieser MCU hat nur USB.
  *    8-Byte-Reports werden über die UART an den Haupt-MCU (main_led.c) weitergereicht; von dort
- *    kommen Panel-Reports (Byte 0 = Report-ID 1..7) und Konfigurations-Antworten (Byte 0 >= 0xA0),
+ *    kommen Panel-Reports (Byte 0 = Report-ID 1..7) und Konfigurations-/Strip-Antworten (Byte 0 >= 0xA0),
  *    die hier auf den jeweiligen Endpunkt gelegt werden.
  *
  *  Die LED-Wiz-ID (SETID) wird immer hier gespeichert, denn sie gehört zum USB-Deskriptor.
@@ -54,6 +54,7 @@
 #else
 	#include "config.h"
 	#include "outputs.h"
+	#include "strip.h"
 #endif
 
 
@@ -137,6 +138,7 @@ static void hardware_init(void)
 	config_init();
 	outputs_init();
 	panel_init();
+	strip_init();
 	#endif
 
 	configure_device();
@@ -206,7 +208,7 @@ static bool send_panel_report(const uint8_t *pdata, uint8_t ndata)
 static void main_task(void)
 {
 	#if !defined(USB_BRIDGE)
-	outputs_task();
+	strip_task();
 	#endif
 
 	if (USB_DeviceState != DEVICE_STATE_Configured)

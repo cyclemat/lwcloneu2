@@ -36,6 +36,7 @@
 #include "config.h"
 #include "outputs.h"
 #include "panel.h"
+#include "strip.h"
 #include "proto.h"
 
 
@@ -49,6 +50,7 @@ int main(void)
 	config_init();
 	outputs_init();
 	panel_init();
+	strip_init();
 
 	set_sleep_mode(SLEEP_MODE_IDLE);
 
@@ -58,7 +60,7 @@ int main(void)
 
 	for (;;)
 	{
-		outputs_task();
+		strip_task();
 
 		/* Reports vom USB-MCU / reports from the USB MCU */
 		msg_t * const prxmsg = msg_recv();

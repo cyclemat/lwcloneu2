@@ -27,6 +27,7 @@
 #define WS2812_MAX_PIXELS   8
 #define CFG_NUM_INPUTS      16
 #define CFG_NUM_AXES        0     /* kein ADC / no ADC */
+#define CFG_NUM_MIRROR      8     /* wenig RAM / little RAM */
 
 #define BOARD_PIN_TABLE(_m_) \
 	_m_( B, 0, PIN_NO_ADC ) /*  0 PB0 */ \

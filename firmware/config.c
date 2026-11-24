@@ -31,7 +31,7 @@ config_t g_cfg;
 #define EE_CONFIG_ADDR  ((void *)64)
 
 _Static_assert(64 + sizeof(config_t) <= E2END + 1, "config_t passt nicht ins EEPROM / config_t does not fit into EEPROM");
-_Static_assert(sizeof(config_t) == 20 + 4 * CFG_NUM_OUTPUTS + 4 * CFG_NUM_INPUTS + 12 * CFG_NUM_AXES,
+_Static_assert(sizeof(config_t) == 20 + 4 * CFG_NUM_OUTPUTS + 4 * CFG_NUM_INPUTS + 12 * CFG_NUM_AXES + 6 * CFG_NUM_MIRROR,
                "config_t Layout geaendert – Tool anpassen / layout changed – adapt the tool");
 
 
@@ -89,37 +89,34 @@ bool config_validate(const config_t *cfg)
 	if (cfg->version != CFG_VERSION || cfg->size != sizeof(config_t) || cfg->board != BOARD_ID)
 		return false;
 
-	if (cfg->n_out != CFG_NUM_OUTPUTS || cfg->n_in != CFG_NUM_INPUTS || cfg->n_axes != CFG_NUM_AXES)
+	if (cfg->n_out != CFG_NUM_OUTPUTS || cfg->n_in != CFG_NUM_INPUTS || cfg->n_axes != CFG_NUM_AXES ||
+	    cfg->n_mirror != CFG_NUM_MIRROR)
 		return false;
 
-	if (!pin_ok(cfg->ws.pin) || cfg->ws.count > WS2812_MAX_PIXELS || cfg->ws.order > WS_ORDER_BRG)
+	/* LED-Strip (strip.c) */
+	if (!pin_ok(cfg->ws.pin) || cfg->ws.count > WS2812_MAX_PIXELS || cfg->ws.order > WS_ORDER_BRG ||
+	    cfg->ws.mode > STRIP_MODE_MIRROR)
 		return false;
 
 	if (!pin_claim(used, cfg->ws.pin))
 		return false;
 
+	for (uint8_t i = 0; i < CFG_NUM_MIRROR; i++)
+	{
+		const cfg_mirror_t *m = &cfg->mirror[i];
+
+		if (m->out == CFG_OUT_NONE)
+			continue;
+
+		if (m->out >= CFG_NUM_OUTPUTS || m->count == 0 || (uint16_t)m->first + m->count > cfg->ws.count)
+			return false;
+	}
+
+	/* LED-Wiz-Ausgänge / outputs */
 	for (uint8_t i = 0; i < CFG_NUM_OUTPUTS; i++)
 	{
-		const cfg_output_t *o = &cfg->out[i];
-
-		switch (o->type)
-		{
-		case OUT_NONE:
-			break;
-
-		case OUT_GPIO:
-			if (!pin_ok(o->a) || !pin_claim(used, o->a))
-				return false;
-			break;
-
-		case OUT_WS2812:
-			if (o->b == 0 || (uint16_t)o->a + o->b > cfg->ws.count || o->c > WS_CH_WHITE)
-				return false;
-			break;
-
-		default:
+		if (!pin_ok(cfg->out[i].pin) || !pin_claim(used, cfg->out[i].pin))
 			return false;
-		}
 	}
 
 	for (uint8_t i = 0; i < CFG_NUM_INPUTS; i++)
@@ -163,15 +160,24 @@ void config_load_defaults(void)
 	g_cfg.n_out    = CFG_NUM_OUTPUTS;
 	g_cfg.n_in     = CFG_NUM_INPUTS;
 	g_cfg.n_axes   = CFG_NUM_AXES;
+	g_cfg.n_mirror = CFG_NUM_MIRROR;
 
 	g_cfg.ws.pin   = CFG_PIN_NONE;
 	g_cfg.ws.count = 0;
 	g_cfg.ws.order = WS_ORDER_GRB;
+	g_cfg.ws.mode  = STRIP_MODE_DIRECT;
 
 	for (uint8_t i = 0; i < CFG_NUM_OUTPUTS; i++)
+		g_cfg.out[i].pin = CFG_PIN_NONE;
+
+	for (uint8_t i = 0; i < CFG_NUM_MIRROR; i++)
 	{
-		g_cfg.out[i].type = OUT_NONE;
-		g_cfg.out[i].a    = CFG_PIN_NONE;
+		/* Vorbelegung: Eintrag i ↔ Ausgang i, Pixel i, weiß – aber unbenutzt (out = CFG_OUT_NONE)
+		 * preset: entry i ↔ output i, pixel i, white – but unused (out = CFG_OUT_NONE) */
+		g_cfg.mirror[i].out   = CFG_OUT_NONE;
+		g_cfg.mirror[i].first = (uint8_t)(i < CFG_NUM_OUTPUTS ? i : 0);
+		g_cfg.mirror[i].count = 1;
+		g_cfg.mirror[i].r = g_cfg.mirror[i].g = g_cfg.mirror[i].b = 255;
 	}
 
 	for (uint8_t i = 0; i < CFG_NUM_INPUTS; i++)
@@ -195,11 +201,8 @@ void config_load_defaults(void)
 
 		for (uint8_t i = 0; i < n; i++)
 		{
-			uint8_t const pin = pgm_read_byte(&defout[i]);
-			if (pin == CFG_PIN_NONE) continue;
-			g_cfg.out[i].type = OUT_GPIO;
-			g_cfg.out[i].a    = pin;
-			g_cfg.out[i].b    = 0;
+			g_cfg.out[i].pin   = pgm_read_byte(&defout[i]);
+			g_cfg.out[i].flags = 0;
 		}
 	}
 	#endif

@@ -13,8 +13,10 @@ Stand: **Beta** – übersetzt und geprüft, aber noch nicht an echter Hardware 
 
 - **Pins frei belegbar, ohne Neukompilieren.** Welcher Pin Ausgang, Taster oder Analog-Achse ist, steht im EEPROM
   und wird per USB gesetzt – mit dem Konfigurations-Tool im Browser, auch im laufenden Betrieb („Anwenden“).
-- **WS2811/WS2812-Strip:** ein Daten-Pin, jeder der 32 LED-Wiz-Ausgänge kann einen Farbkanal (Rot/Grün/Blau/Weiß)
-  eines Pixelbereichs steuern. LED-Wiz-Software (DOF, LedBlinky, …) sieht weiterhin nur 32 Ausgänge.
+- **WS2811/WS2812-Strip als eigenes Modul:** hängt zusätzlich an einem freien Pin, die 32 LED-Wiz-Ausgänge bleiben
+  unverändert reine GPIO-Ausgänge. Zwei Betriebsarten: **Direkt** (eigene Programme setzen die Pixel per USB,
+  Befehle `0xB0–0xB3`, auch über `LWZ_RAWWRITE` der `ledwiz.dll`) oder **Spiegel** (Pixelbereiche leuchten in einer
+  Farbe, die Helligkeit folgt einem LED-Wiz-Ausgang – funktioniert sofort mit DOF, LedBlinky, …).
 - **Analoge Joystick-Achsen** (bis 8) mit Kalibrierung (Min/Mitte/Max), **Totzone** und Invertierung.
 - **4 Joysticks** mit je 4 Achsen (X/Y/Z/Rz) und 8 Tasten, Tastatur, Medientasten, Maus (Encoder/Trackball).
 - `ledwiz.dll`-Ersatz mit asynchronem USB-I/O (blockiert die Anwendung nicht), Fehler beim Prozessende behoben.
@@ -50,8 +52,9 @@ den Haupt-MCU weiter; Konfiguration und Pins gehören zum Haupt-MCU.
 
 ## Konfigurations-Tool
 
-- **Ausgänge:** Typ (GPIO/WS2812), Pin, invertiert; für WS2812 Pixel-Bereich und Farbkanal. „Test“ schaltet den
-  Ausgang zum Ausprobieren ein.
+- **Ausgänge:** Pin, invertiert. „Test“ schaltet den Ausgang zum Ausprobieren ein.
+- **LED-Strip:** Daten-Pin, Pixelzahl, Farbreihenfolge, Betriebsart. Im Spiegel-Modus eine Tabelle
+  Ausgang → Pixel ab/Anzahl → Farbe; im Direkt-Modus Testknöpfe (Füllen, Pixel setzen, Lauflicht).
 - **Eingänge:** Pin → Funktion (Taste, Modifier, Medien, Maustaste, Joystick-Richtung/-Taste, Shift, Maus-Encoder),
   zweite Funktion bei gedrücktem Shift, aktiv high/low, Live-Anzeige.
 - **Achsen:** Pin (nur ADC-fähige), Joystick, Achse, Min/Mitte/Max aus dem Live-Wert übernehmen, Totzone in %,
@@ -91,10 +94,11 @@ Ergebnis in `win32/bin/x86` bzw. `win32/bin/x64`: `ledwiz.dll`, `testapp.exe` (s
 firmware/
   main_usb.c        USB-MCU: LUFA, Reports entgegennehmen, Antworten/Panel-Reports senden (oder UART-Brücke)
   main_led.c        Haupt-MCU hinter einer Brücke (Mega 2560 / Uno)
-  proto.c/.h        USB-Befehle: LED-Wiz (SBA/PBA) + Konfiguration 0xA0–0xA7
+  proto.c/.h        USB-Befehle: LED-Wiz (SBA/PBA) + Konfiguration 0xA0–0xA7 + Strip 0xB0–0xB3
   config.c/.h       Konfigurationsstruktur, EEPROM, Prüfung
   pins.c/.h         Pin-Index → Port/Bit/ADC je Board (BOARD_PIN_TABLE in <board>/pinmap.h)
-  outputs.c/.h      32 Ausgänge: LED-Wiz-Profile, Soft-PWM auf GPIO, Pixel-Rendering
+  outputs.c/.h      32 Ausgänge: LED-Wiz-Profile, Soft-PWM auf GPIO (Grundcode, wie Original)
+  strip.c/.h        WS2811/WS2812-Strip: Direkt-Modus (USB-Befehle) und Spiegel-Modus (folgt den Ausgängen)
   ws2812.c/.h       Bit-Bang-Treiber 800 kHz (8/16 MHz)
   panel.c/.h        Eingänge: Entprellung, Shift, Encoder, Analog-Achsen, HID-Reports
   descriptors.c/.h  USB-Deskriptoren (Misc, Panel, LED-Wiz)
@@ -128,8 +132,10 @@ Status: **beta** – compiled and reviewed, not yet tested on real hardware.
 ## New in v2
 - **Pins assignable at runtime, no recompiling.** Which pin is an output, a button or an analog axis is stored in
   EEPROM and set via USB with the browser based configuration tool – even while running ("Apply").
-- **WS2811/WS2812 strip:** one data pin; each of the 32 LED-Wiz outputs can drive a color channel
-  (red/green/blue/white) of a pixel range. LED-Wiz software (DOF, LedBlinky, …) still sees 32 outputs.
+- **WS2811/WS2812 strip as a separate module:** an extra on a free pin, the 32 LED-Wiz outputs stay plain GPIO
+  outputs. Two modes: **direct** (your programs set pixels via USB, commands `0xB0–0xB3`, also through
+  `LWZ_RAWWRITE` of `ledwiz.dll`) or **mirror** (pixel ranges light up in a color, brightness follows an LED-Wiz
+  output – works with DOF, LedBlinky, … right away).
 - **Analog joystick axes** (up to 8) with calibration (min/center/max), **dead zone** and inversion.
 - **4 joysticks** with 4 axes (X/Y/Z/Rz) and 8 buttons each, keyboard, media keys, mouse (encoder/trackball).
 - `ledwiz.dll` replacement with asynchronous USB I/O (does not block the application), process exit hang fixed.
@@ -151,9 +157,10 @@ the internal UART to the main MCU, which owns configuration and pins – **both*
    replace its bundled `ledwiz.dll`. The LED-Wiz id (1–16) is set in the tool under "Device".
 
 ## Configuration tool
-Outputs (type, pin, inverted, WS2812 pixel range and channel, test button), inputs (pin → function, shift function,
-active high/low, live indicator), axes (ADC pins only, joystick/axis, take min/center/max from the live value, dead
-zone in %, output preview), device (LED-Wiz id, JSON export/import, factory defaults, bootloader).
+Outputs (pin, inverted, test button), inputs (pin → function, shift function, active high/low, live indicator),
+axes (ADC pins only, joystick/axis, take min/center/max from the live value, dead zone in %, output preview),
+LED strip (data pin, pixel count, color order, mode; mirror table output → pixels → color; direct-mode test
+buttons), device (LED-Wiz id, JSON export/import, factory defaults, bootloader).
 The tool uses WebHID over the same USB HID connection the LED-Wiz software uses – no COM port, no driver.
 Protocol: [`firmware/proto.h`](firmware/proto.h), data layout: [`firmware/config.h`](firmware/config.h).
 

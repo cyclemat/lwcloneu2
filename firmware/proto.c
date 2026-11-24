@@ -21,6 +21,7 @@
 #include "pins.h"
 #include "outputs.h"
 #include "panel.h"
+#include "strip.h"
 
 
 #define REPLY_QUEUE_LEN 4
@@ -30,7 +31,7 @@ static volatile uint8_t s_rpos = 0;
 static volatile uint8_t s_wpos = 0;
 
 
-static void push_reply(const uint8_t *p8)
+void proto_push_reply(const uint8_t *p8)
 {
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
@@ -65,6 +66,7 @@ static void apply_all(void)
 {
 	outputs_apply_config();
 	panel_apply_config();
+	strip_apply_config();
 }
 
 static void handle_cfg(const uint8_t *p8)
@@ -127,6 +129,7 @@ static void handle_cfg(const uint8_t *p8)
 		g_cfg.n_out    = CFG_NUM_OUTPUTS;
 		g_cfg.n_in     = CFG_NUM_INPUTS;
 		g_cfg.n_axes   = CFG_NUM_AXES;
+		g_cfg.n_mirror = CFG_NUM_MIRROR;
 
 		r[3] = STATUS_OK;
 		break;
@@ -216,11 +219,21 @@ static void handle_cfg(const uint8_t *p8)
 		break;
 	}
 
-	push_reply(r);
+	proto_push_reply(r);
 }
 
 void proto_handle_report(const uint8_t *p8)
 {
+	if (p8[0] >= CMD_STRIP_FIRST && p8[0] <= CMD_STRIP_LAST)
+	{
+		uint8_t r[PROTO_REPORT_SIZE];
+
+		if (strip_handle_report(p8, r))
+			proto_push_reply(r);
+
+		return;
+	}
+
 	if (proto_is_cfg_cmd(p8[0]))
 	{
 		handle_cfg(p8);

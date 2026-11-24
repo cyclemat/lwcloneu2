@@ -8,7 +8,11 @@ Stand: 24.11.2026
 - LUFA 130901 als gekürzte Kopie fest eingebettet (`firmware/lufa`), Submodul entfernt → ZIP-Download baut.
 - Firmware auf **v2** umgebaut: Pin-Belegung zur Laufzeit im EEPROM, USB-Befehle `0xA0–0xA7` (siehe `firmware/proto.h`),
   WS2811/WS2812-Treiber (`ws2812.c`), Analog-Achsen mit Min/Mitte/Max + Totzone (`panel.c`), 4 Joysticks
-  mit je 4 Achsen (int8) + 8 Tasten, Konfigurationsstruktur `config.h` (372 Byte Standard, boardabhängig).
+  mit je 4 Achsen (int8) + 8 Tasten, Konfigurationsstruktur `config.h` (564 Byte Standard, boardabhängig).
+- **24.11.2026, Nutzerwunsch:** WS2811/12 soll „eine eigene Sache“ sein und den Grundcode nicht ändern → Umbau
+  auf **v2.1**: `outputs.c` wieder reines GPIO (wie Original), neues Modul `strip.c` mit Direkt-Modus (USB-Befehle
+  `0xB0–0xB3`) und Spiegel-Modus (`mirror[]`: Ausgang → Pixel ab/Anzahl → Farbe). Nutzer hat „Beides“ gewählt.
+  Konfig-Layout Version 2, Protokoll 2; Tool-Reiter „LED-Strip“.
 - Alte `led.c`/`pinmap`-Makros entfernt; je Board jetzt `BOARD_PIN_TABLE` in `pinmap.h`.
 - Windows-DLL: Fehler behoben (Hänger beim Prozessende in `DllMain`, Event-Leak, Listenpflege), CMake-Build.
 - Konfigurations-Tool als WebHID-Seite: `tools/lwcconfig-web/index.html` (Edge/Chrome, ohne Installation).
@@ -22,8 +26,10 @@ Stand: 24.11.2026
 
 ## Status / Beta
 - **Nichts an echter Hardware getestet** (keine Hardware hier). Alle Firmware-Ziele übersetzen und linken
-  (avr-gcc 7.3 aus PlatformIO): Leonardo 36 % Flash / 54 % RAM, Mega2560 3 % / 20 %, Uno 25 % / 71 %,
-  Breakout 32U2 31 % / 84 % (RAM knapp → kleinere Tabellen: 16 Eingänge, 0 Achsen, 8 Pixel).
+  (avr-gcc 7.3 aus PlatformIO), Stand v2.1: Leonardo 38 % Flash / 62 % RAM, Mega2560 4 % / 23 %, Uno 27 % / 81 %,
+  Breakout 32U2 33 % / 86 % (RAM knapp → kleinere Tabellen: 16 Eingänge, 0 Achsen, 8 Pixel, 8 Spiegel-Einträge).
+- Strip-Übertragung sperrt Interrupts (~30 µs/Pixel). Auf Mega/Uno kann die Brücken-UART (250 kBit/s, 2-Byte-FIFO)
+  währenddessen Reports verlieren → deshalb antwortet `STRIP_SHOW` erst nach dem Schreiben; Hosts sollen darauf warten.
 - WS2812-Timing per Zyklen gerechnet (16 MHz: T0H 312 ns, T1H 812 ns; 8 MHz: 375/625 ns) – am Oszi prüfen.
 - Dual-Chip-Pfad (Uno/Mega: Antworten über UART mit Byte 0 ≥ 0xA0) ungetestet.
 
@@ -43,4 +49,5 @@ Stand: 24.11.2026
 - DLL braucht UCRT (Windows 10+; auf Windows 7 UCRT-Update). Für eine MSVC-DLL: CI-Workflow (windows-latest).
 - Webtool: Encoder-Eingänge werden nicht entprellt (wie Upstream), Joystick-Tasten 9–16 nicht vorgesehen.
 - Mögliche Erweiterungen: PWM-Hardwarekanäle, mehr als 32 Eingänge auf dem Mega (CFG_NUM_INPUTS pro Board),
-  lwcconfig.exe mit Konfigurationsbefehlen.
+  lwcconfig.exe mit Konfigurationsbefehlen, 64-Byte-Reports für schnellere Pixel-Übertragung (eigene HID-Schnittstelle),
+  DOF-Plugin für den Direkt-Modus.

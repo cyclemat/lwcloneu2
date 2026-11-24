@@ -14,12 +14,12 @@
  */
 
 /*
- * Die gesamte Pin-Belegung (Ausgänge, Eingänge, Analog-Achsen) liegt im EEPROM und wird
- * über USB gesetzt (siehe proto.h). Diese Datei ist die einzige Beschreibung des Formats –
+ * Die gesamte Pin-Belegung (Ausgänge, Eingänge, Analog-Achsen, LED-Strip) liegt im EEPROM und
+ * wird über USB gesetzt (siehe proto.h). Diese Datei ist die einzige Beschreibung des Formats –
  * das Konfigurations-Tool (tools/lwcconfig-web) spiegelt genau dieses Layout.
  *
- * The whole pin assignment (outputs, inputs, analog axes) lives in EEPROM and is set via
- * USB (see proto.h). This file is the single description of the layout – the configuration
+ * The whole pin assignment (outputs, inputs, analog axes, LED strip) lives in EEPROM and is set
+ * via USB (see proto.h). This file is the single description of the layout – the configuration
  * tool (tools/lwcconfig-web) mirrors it exactly.
  *
  * Alle Mehrbyte-Werte sind little-endian. / All multi-byte values are little-endian.
@@ -34,7 +34,7 @@
 
 #define CFG_MAGIC0        'L'
 #define CFG_MAGIC1        'W'
-#define CFG_VERSION       1
+#define CFG_VERSION       2
 
 /* Tabellengrößen; Boards mit wenig RAM dürfen sie in pinmap.h verkleinern. Die Werte stehen im
  * Kopf der Konfiguration, das Tool liest das Layout daraus.
@@ -47,25 +47,23 @@
 #if !defined(CFG_NUM_AXES)
 #define CFG_NUM_AXES      8
 #endif
+#if !defined(CFG_NUM_MIRROR)
+#define CFG_NUM_MIRROR    32    /* Spiegel-Einträge des LED-Strips / mirror entries of the LED strip */
+#endif
+#if !defined(WS2812_MAX_PIXELS)
+#define WS2812_MAX_PIXELS 0     /* Board ohne LED-Strip / board without LED strip */
+#endif
 
 #define CFG_PIN_NONE      0xFF  /* Pin nicht belegt / pin not assigned */
+#define CFG_OUT_NONE      0xFF  /* kein Ausgang (Spiegel-Eintrag unbenutzt) / no output (mirror entry unused) */
 
-/* Ausgangstypen / output types */
-enum {
-	OUT_NONE   = 0,
-	OUT_GPIO   = 1,   /* Soft-PWM auf einem Pin / soft PWM on a pin                   */
-	OUT_WS2812 = 2,   /* Kanal auf dem WS2811/WS2812-Strip / channel on the LED strip */
-};
-
-/* Flags für OUT_GPIO / flags for OUT_GPIO */
+/* Flags für Ausgänge / flags for outputs */
 #define OUTF_INVERT   0x01    /* aktiv low (z. B. LED gegen VCC) / active low */
 
-/* Farbkanal für OUT_WS2812 / color channel for OUT_WS2812 */
+/* Betriebsart des LED-Strips / LED strip mode (strip.c) */
 enum {
-	WS_CH_RED   = 0,
-	WS_CH_GREEN = 1,
-	WS_CH_BLUE  = 2,
-	WS_CH_WHITE = 3,  /* alle drei Kanäle gleich / all three channels equal */
+	STRIP_MODE_DIRECT = 0, /* PC setzt Pixel per USB-Befehl / host sets pixels via USB commands  */
+	STRIP_MODE_MIRROR = 1, /* Strip spiegelt LED-Wiz-Ausgänge (mirror[]) / strip mirrors outputs */
 };
 
 /* Farbreihenfolge des Strips / color order of the strip */
@@ -90,11 +88,11 @@ enum {
 /* Flags für Achsen / flags for axes */
 #define AXF_INVERT    0x01
 
+/* LED-Wiz-Ausgang: ein GPIO-Pin mit Soft-PWM (wie das Original) / one GPIO pin with soft PWM */
 typedef struct {
-	uint8_t type;      /* OUT_NONE / OUT_GPIO / OUT_WS2812                                        */
-	uint8_t a;         /* GPIO: Pin-Index          WS2812: erster Pixel / first pixel             */
-	uint8_t b;         /* GPIO: Flags (OUTF_*)     WS2812: Anzahl Pixel / number of pixels (>= 1)  */
-	uint8_t c;         /* GPIO: -                  WS2812: Farbkanal WS_CH_* / color channel       */
+	uint8_t pin;        /* Pin-Index oder CFG_PIN_NONE                                           */
+	uint8_t flags;      /* OUTF_*                                                                */
+	uint8_t reserved[2];
 } cfg_output_t;
 
 typedef struct {
@@ -116,6 +114,18 @@ typedef struct {
 	uint8_t  reserved;
 } cfg_axis_t;
 
+/* Spiegel-Eintrag (STRIP_MODE_MIRROR): Pixelbereich leuchtet in der Farbe, Helligkeit folgt dem
+ * LED-Wiz-Ausgang. Mehrere Einträge dürfen denselben Ausgang oder dieselben Pixel benutzen
+ * (bei Überlappung gewinnt je Farbkanal der hellere Wert).
+ * Mirror entry (STRIP_MODE_MIRROR): the pixel range lights up in the color, brightness follows the
+ * LED-Wiz output. Several entries may use the same output or pixels (brighter channel wins). */
+typedef struct {
+	uint8_t out;        /* LED-Wiz-Ausgang 0..31 oder CFG_OUT_NONE / output 0..31 or CFG_OUT_NONE */
+	uint8_t first;      /* erster Pixel / first pixel                                              */
+	uint8_t count;      /* Anzahl Pixel (>= 1) / number of pixels                                  */
+	uint8_t r, g, b;    /* Farbe bei voller Helligkeit / color at full brightness                  */
+} cfg_mirror_t;
+
 typedef struct {
 	/* Kopf / header (8 Byte) */
 	uint8_t  magic[2];  /* 'L','W' */
@@ -126,23 +136,26 @@ typedef struct {
 
 	/* Allgemein / general (8 Byte) */
 	uint8_t  flags;
-	uint8_t  n_out;     /* CFG_NUM_OUTPUTS – Anzahl Einträge in out[]  */
-	uint8_t  n_in;      /* CFG_NUM_INPUTS  – Anzahl Einträge in in[]   */
-	uint8_t  n_axes;    /* CFG_NUM_AXES    – Anzahl Einträge in axes[] */
-	uint8_t  reserved0[4];
+	uint8_t  n_out;     /* CFG_NUM_OUTPUTS – Anzahl Einträge in out[]    */
+	uint8_t  n_in;      /* CFG_NUM_INPUTS  – Anzahl Einträge in in[]     */
+	uint8_t  n_axes;    /* CFG_NUM_AXES    – Anzahl Einträge in axes[]   */
+	uint8_t  n_mirror;  /* CFG_NUM_MIRROR  – Anzahl Einträge in mirror[] */
+	uint8_t  reserved0[3];
 
-	/* WS2811/WS2812-Strip (4 Byte) */
+	/* WS2811/WS2812-Strip (4 Byte) – eigenes Modul strip.c, unabhängig von den 32 Ausgängen
+	 * WS2811/WS2812 strip (4 bytes) – separate module strip.c, independent of the 32 outputs */
 	struct {
 		uint8_t pin;      /* Daten-Pin oder CFG_PIN_NONE / data pin */
 		uint8_t count;    /* Anzahl Pixel (<= WS2812_MAX_PIXELS) / number of pixels */
 		uint8_t order;    /* WS_ORDER_* */
-		uint8_t reserved;
+		uint8_t mode;     /* STRIP_MODE_* */
 	} ws;
 
-	cfg_output_t out[CFG_NUM_OUTPUTS];   /* 4 Byte je Eintrag  / per entry */
-	cfg_input_t  in[CFG_NUM_INPUTS];     /* 4 Byte je Eintrag  / per entry */
-	cfg_axis_t   axes[CFG_NUM_AXES];     /* 12 Byte je Eintrag / per entry */
-} config_t;                              /* Standard / default: 20 + 128 + 128 + 96 = 372 Byte */
+	cfg_output_t out[CFG_NUM_OUTPUTS];     /* 4 Byte je Eintrag  / per entry */
+	cfg_input_t  in[CFG_NUM_INPUTS];       /* 4 Byte je Eintrag  / per entry */
+	cfg_axis_t   axes[CFG_NUM_AXES];       /* 12 Byte je Eintrag / per entry */
+	cfg_mirror_t mirror[CFG_NUM_MIRROR];   /* 6 Byte je Eintrag  / per entry */
+} config_t;                                /* Standard / default: 20 + 128 + 128 + 96 + 192 = 564 Byte */
 
 /* Die aktive Konfiguration im RAM. Schreibzugriffe nur über proto.c / config_*().
  * The active configuration in RAM. Write only through proto.c / config_*(). */

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.1.0 (Beta) – 2026-11-24
+
+Alle Punkte **(Beta)**: übersetzt und geprüft, aber noch nicht an echter Hardware getestet.
+All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
+
+### Neu / New
+- WS2811/WS2812-Strip ist jetzt ein **eigenes Modul** (`firmware/strip.c`) an einem zusätzlichen Pin mit zwei
+  Betriebsarten: **Direkt** – der PC setzt die Pixel über die USB-Befehle `0xB0–0xB3` (`STRIP_INFO`, `STRIP_SET`,
+  `STRIP_FILL`, `STRIP_SHOW`; die Antwort auf `STRIP_SHOW` kommt, sobald der Strip geschrieben ist); **Spiegel** –
+  bis zu 32 Einträge „Ausgang → Pixel ab/Anzahl → Farbe“, die Helligkeit folgt dem LED-Wiz-Ausgang (DOF-tauglich).
+  The LED strip is now a **separate module** on an extra pin with two modes: **direct** (host sets pixels via USB
+  commands `0xB0–0xB3`) and **mirror** (up to 32 entries output → pixels → color following the LED-Wiz output).
+- Konfigurations-Tool: eigener Reiter „LED-Strip“ mit Spiegel-Tabelle (Farbwähler) und Testknöpfen für den
+  Direkt-Modus (Füllen, Pixel setzen, Lauflicht). / Tool: new "LED strip" tab with mirror table and direct-mode tests.
+
+### Verbessert / Improved
+- Die 32 LED-Wiz-Ausgänge sind wieder **reine GPIO-Ausgänge wie im Original** (`outputs.c` ohne Strip-Code);
+  der Strip liest nur noch die Helligkeiten über `outputs_get_level()`.
+  The 32 LED-Wiz outputs are plain GPIO outputs again like the original; the strip only reads their levels.
+- Konfigurationslayout Version 2 (`config.h`): Ausgang = Pin + Flags, neuer Block `mirror[]`, `ws.mode`;
+  Protokollversion 2, Firmware 2.1. Alte Konfigurationen im EEPROM werden erkannt und durch die Werksbelegung ersetzt.
+  Configuration layout version 2; old EEPROM contents are detected and replaced by the board defaults.
+
 ## 2.0.0 (Beta) – 2026-11-24
 
 Alle Punkte **(Beta)**: übersetzt und geprüft, aber noch nicht an echter Hardware getestet.
@@ -9,8 +32,8 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
 - Pin-Belegung zur Laufzeit: Ausgänge, Eingänge und Analog-Achsen werden per USB konfiguriert und im EEPROM
   gespeichert – ohne Neukompilieren (`firmware/config.h`, `firmware/proto.h`).
   Runtime pin assignment: outputs, inputs and analog axes are configured via USB and stored in EEPROM.
-- WS2811/WS2812-Treiber: jeder der 32 LED-Wiz-Ausgänge kann einen Farbkanal (R/G/B/Weiß) eines Pixelbereichs steuern.
-  WS2811/WS2812 driver: each of the 32 LED-Wiz outputs can drive a color channel of a pixel range.
+- WS2811/WS2812-Treiber (Bit-Bang, 8/16 MHz). In 2.0.0 noch als Ausgangstyp, seit 2.1.0 eigenes Modul (siehe oben).
+  WS2811/WS2812 driver (bit-bang, 8/16 MHz). Output type in 2.0.0, separate module since 2.1.0 (see above).
 - Analoge Joystick-Achsen (bis 8, auf 4 Joysticks mit X/Y/Z/Rz) mit Min/Mitte/Max-Kalibrierung, Totzone und Invertierung.
   Analog joystick axes with calibration, dead zone and inversion.
 - Konfigurations-Tool im Browser (WebHID, Edge/Chrome): `tools/lwcconfig-web/index.html`, Deutsch/Englisch, hell/dunkel,

@@ -1,5 +1,5 @@
 /*
- * LWCloneU2 – Ausgänge (LED-Wiz-Logik, Soft-PWM, WS2812) / outputs
+ * LWCloneU2 – Ausgänge (LED-Wiz-Logik, Soft-PWM auf GPIO) / outputs
  *
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
  * Copyright (C) 2026 cyclemat
@@ -19,11 +19,14 @@
  *   sonst         : PBA – 8 Profilwerte, vier Reports hintereinander = 32 Ausgänge
  *                   0..48 Helligkeit, 129 Dreieck, 130 Rechteck, 131 Abfall, 132 Anstieg
  *
- * Ein Ausgang ist zur Laufzeit entweder ein GPIO-Pin (Soft-PWM mit 49 Stufen, ~100 Hz) oder
- * ein Kanal (R/G/B/Weiß) eines Pixelbereichs auf dem WS2811/WS2812-Strip.
+ * Jeder der 32 Ausgänge ist ein GPIO-Pin mit Soft-PWM (49 Stufen, ~100 Hz) – genau wie beim
+ * Original-LED-Wiz. Welcher Pin, steht in g_cfg.out[] (config.h). Der WS2811/WS2812-Strip ist
+ * ein eigenes Modul (strip.c) und greift von außen nur über outputs_get_level() auf die
+ * aktuellen Helligkeiten zu.
  *
- * An output is at runtime either a GPIO pin (soft PWM, 49 steps, ~100 Hz) or a channel
- * (R/G/B/white) of a pixel range on the WS2811/WS2812 strip.
+ * Each of the 32 outputs is a GPIO pin with soft PWM (49 steps, ~100 Hz) – just like the original
+ * LED-Wiz. Which pin is stored in g_cfg.out[] (config.h). The WS2811/WS2812 strip is a separate
+ * module (strip.c) that only reads the current levels via outputs_get_level().
  */
 
 #include <string.h>
@@ -36,8 +39,6 @@
 #include "config.h"
 #include "pins.h"
 #include "outputs.h"
-#include "ws2812.h"
-#include "clock.h"
 
 
 #if !defined(LED_TIMER_vect)
@@ -45,14 +46,12 @@
 void outputs_init(void) {}
 void outputs_apply_config(void) {}
 void outputs_ledwiz_report(const uint8_t *p8bytes) { (void)p8bytes; }
-void outputs_task(void) {}
 uint8_t outputs_get_level(uint8_t index) { (void)index; return 0; }
 
 #else
 
 
 #define MAX_PWM             49
-#define WS_REFRESH_MS       10
 
 
 /* LED-Wiz-Zustand je Ausgang / LED-Wiz state per output */
@@ -74,16 +73,6 @@ typedef struct {
 static gpio_out_t      s_gpio[CFG_NUM_OUTPUTS];
 static volatile uint8_t s_ngpio = 0;      /* vom ISR benutzt / used by the ISR */
 static uint8_t         s_ngpio_cfg = 0;   /* belegte Einträge (zum Freigeben) / used entries (for releasing) */
-
-/* WS2812 */
-static pin_io_t         s_ws_io;
-static uint8_t          s_ws_active = 0;
-static uint8_t          s_ws_count  = 0;
-static uint8_t          s_ws_order  = WS_ORDER_GRB;
-static uint8_t          s_ws_out[CFG_NUM_OUTPUTS];  /* Indizes der WS-Ausgänge / indices of WS outputs */
-static volatile uint8_t s_nws = 0;
-static volatile uint8_t s_ws_dirty = 0;
-static uint8_t          s_pixels[WS2812_MAX_PIXELS * 3];
 
 
 void outputs_ledwiz_report(const uint8_t *p8bytes)
@@ -174,21 +163,8 @@ ISR(LED_TIMER_vect)
 		counter = MAX_PWM - 1;
 		t += s_dt;
 
-		uint8_t ws_changed = 0;
-
 		for (uint8_t i = 0; i < CFG_NUM_OUTPUTS; i++)
-		{
-			uint8_t const v = level_of(s_led[i].enable, s_led[i].mode, t);
-
-			if (s_pwm[i] != v)
-			{
-				s_pwm[i] = v;
-				ws_changed = 1;
-			}
-		}
-
-		if (ws_changed && s_nws)
-			s_ws_dirty = 1;
+			s_pwm[i] = level_of(s_led[i].enable, s_led[i].mode, t);
 	}
 
 	/* GPIO-Pins setzen / drive GPIO pins */
@@ -213,7 +189,6 @@ void outputs_apply_config(void)
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
 		s_ngpio = 0;
-		s_nws = 0;
 	}
 
 	for (uint8_t i = 0; i < s_ngpio_cfg; i++)
@@ -221,59 +196,29 @@ void outputs_apply_config(void)
 
 	s_ngpio_cfg = 0;
 
-	if (s_ws_active)
-	{
-		pins_mode_input(&s_ws_io, false);
-		s_ws_active = 0;
-	}
-
-	/* 2. WS2812-Strip / LED strip */
-	if (g_cfg.ws.pin != CFG_PIN_NONE && g_cfg.ws.count > 0 && g_cfg.ws.count <= WS2812_MAX_PIXELS &&
-	    pins_resolve(g_cfg.ws.pin, &s_ws_io))
-	{
-		pins_mode_output(&s_ws_io);
-		s_ws_count  = g_cfg.ws.count;
-		s_ws_order  = g_cfg.ws.order;
-		s_ws_active = 1;
-	}
-
-	/* 3. Ausgänge auflösen / resolve outputs */
+	/* 2. Ausgänge auflösen / resolve outputs */
 	uint8_t ngpio = 0;
-	uint8_t nws = 0;
 
 	for (uint8_t i = 0; i < CFG_NUM_OUTPUTS; i++)
 	{
 		cfg_output_t const * const o = &g_cfg.out[i];
+		pin_io_t io;
 
-		if (o->type == OUT_GPIO && o->a != CFG_PIN_NONE)
-		{
-			pin_io_t io;
+		if (o->pin == CFG_PIN_NONE || !pins_resolve(o->pin, &io))
+			continue;
 
-			if (!pins_resolve(o->a, &io))
-				continue;
+		pins_mode_output(&io);
 
-			pins_mode_output(&io);
-
-			s_gpio[ngpio].io   = io;
-			s_gpio[ngpio].idx  = i;
-			s_gpio[ngpio].inv  = (o->b & OUTF_INVERT) ? 0xFF : 0x00;
-			ngpio++;
-		}
-		else if (o->type == OUT_WS2812 && s_ws_active)
-		{
-			if (o->b == 0 || (uint16_t)o->a + o->b > s_ws_count)
-				continue;
-
-			s_ws_out[nws++] = i;
-		}
+		s_gpio[ngpio].io   = io;
+		s_gpio[ngpio].idx  = i;
+		s_gpio[ngpio].inv  = (o->flags & OUTF_INVERT) ? 0xFF : 0x00;
+		ngpio++;
 	}
 
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
 		s_ngpio_cfg = ngpio;
 		s_ngpio = ngpio;
-		s_nws = nws;
-		s_ws_dirty = 1;
 	}
 }
 
@@ -291,75 +236,6 @@ void outputs_init(void)
 uint8_t outputs_get_level(uint8_t index)
 {
 	return (index < CFG_NUM_OUTPUTS) ? s_pwm[index] : 0;
-}
-
-
-/* Stufe 0..49 → 0..255 / level 0..49 → 0..255 */
-static uint8_t level_to_8bit(uint8_t level)
-{
-	if (level >= MAX_PWM)
-		return 255;
-
-	return (uint8_t)(((uint16_t)level * 255 + (MAX_PWM / 2)) / MAX_PWM);
-}
-
-static void ws_render(void)
-{
-	uint16_t const nbytes = (uint16_t)s_ws_count * 3;
-	memset(s_pixels, 0x00, nbytes);
-
-	/* Position von R, G, B im Pixel je Farbreihenfolge / byte position of R, G, B per color order */
-	uint8_t pr, pg, pb;
-
-	switch (s_ws_order)
-	{
-	case WS_ORDER_RGB: pr = 0; pg = 1; pb = 2; break;
-	case WS_ORDER_BRG: pr = 1; pg = 2; pb = 0; break;
-	default:           pr = 1; pg = 0; pb = 2; break;   /* GRB */
-	}
-
-	uint8_t const nws = s_nws;
-
-	for (uint8_t k = 0; k < nws; k++)
-	{
-		uint8_t const idx = s_ws_out[k];
-		cfg_output_t const * const o = &g_cfg.out[idx];
-		uint8_t const v = level_to_8bit(s_pwm[idx]);
-
-		if (v == 0)
-			continue;
-
-		uint8_t const last = o->a + o->b;   /* geprüft in apply / checked in apply */
-
-		for (uint8_t p = o->a; p < last; p++)
-		{
-			uint8_t * const px = &s_pixels[p * 3];
-
-			/* bei Überlappung gewinnt der hellere Wert / on overlap the brighter value wins */
-			if (o->c == WS_CH_RED   || o->c == WS_CH_WHITE) { if (px[pr] < v) px[pr] = v; }
-			if (o->c == WS_CH_GREEN || o->c == WS_CH_WHITE) { if (px[pg] < v) px[pg] = v; }
-			if (o->c == WS_CH_BLUE  || o->c == WS_CH_WHITE) { if (px[pb] < v) px[pb] = v; }
-		}
-	}
-
-	ws2812_send(&s_ws_io, s_pixels, nbytes);
-}
-
-void outputs_task(void)
-{
-	static uint16_t t_last = 0;
-
-	if (!s_ws_active || !s_ws_dirty)
-		return;
-
-	uint16_t const now = clock_ms();
-
-	if ((uint16_t)(now - t_last) < WS_REFRESH_MS)
-		return;
-
-	t_last = now;
-	s_ws_dirty = 0;
-	ws_render();
 }
 
 
