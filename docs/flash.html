@@ -19,8 +19,27 @@
 .progress.ok b { background: var(--green); }
 .progress.err b { background: var(--red); }
 #log { min-height: 180px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+details { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 8px 0; background: var(--bg2); }
+details summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px; }
+details summary::before { content: "▸"; color: var(--accent); transition: .15s; }
+details[open] summary::before { transform: rotate(90deg); }
+details .body { margin-top: 8px; font-size: 13.5px; }
+details .body p, details .body ol, details .body ul { margin: 6px 0; }
+details .body ol, details .body ul { padding-left: 20px; }
+.overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+.ov { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; }
+.ov b { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13.5px; }
+.ov b i { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-style: normal; font-weight: 700; font-size: 12px; align-items: center; justify-content: center; flex: none; }
+.ov span { color: var(--muted); }
+.icsp { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.icsp svg { width: 220px; height: auto; flex: none; }
+.icsp .cap { font-size: 13px; color: var(--muted); max-width: 420px; }
+table.ts { font-size: 13px; }
+table.ts td:first-child { font-weight: 600; white-space: nowrap; }
+#nextstep { display: none; }
 .warnbox { border-left: 3px solid var(--accent); padding: 6px 10px; background: var(--bg2); border-radius: 8px; margin: 8px 0; font-size: 13px; }
 .filebox { font-size: 12.5px; color: var(--muted); }
+a.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; text-decoration: none; display: inline-block; }
 input[type=file] { font: inherit; font-size: 12.5px; max-width: 100%; }
 a { color: var(--blue); }
 </style>
@@ -38,6 +57,71 @@ a { color: var(--blue); }
   <div id="unsupported" class="card unsupported" style="display:none">
     <strong data-i18n="nosupport">Dieser Browser unterstützt Web Serial / WebUSB nicht.</strong>
     <div class="hint" data-i18n="nosupport2">Bitte Microsoft Edge oder Google Chrome (ab Version 89, Desktop) verwenden. Firefox und Safari können keine USB-Geräte ansprechen.</div>
+  </div>
+
+  <div class="card" id="guide">
+    <h2 data-i18n="g_title">So funktioniert es</h2>
+    <div class="overview">
+      <div class="ov"><b><i>1</i><span data-i18n="g_o1">Browser</span></b><span data-i18n="g_o1t">Edge oder Chrome am PC; Board per USB anschließen (Datenkabel, kein Ladekabel).</span></div>
+      <div class="ov"><b><i>2</i><span data-i18n="g_o2">Board wählen</span></b><span data-i18n="g_o2t">Unten das Board auswählen – die Seite zeigt die passenden Schritte und Dateien.</span></div>
+      <div class="ov"><b><i>3</i><span data-i18n="g_o3">Bootloader</span></b><span data-i18n="g_o3t">Das Board in den Bootloader bringen: Reset, Brücke am ICSP-Header oder der HID-Knopf unten.</span></div>
+      <div class="ov"><b><i>4</i><span data-i18n="g_o4">Flashen</span></b><span data-i18n="g_o4t">Auf den orangen Knopf klicken, Port bzw. Gerät im Dialog wählen, fertig – die Seite prüft den Flash.</span></div>
+      <div class="ov"><b><i>5</i><span data-i18n="g_o5">Einrichten</span></b><span data-i18n="g_o5t">Danach im Konfigurations-Tool Pins, Taster, Achsen und Strip zuweisen.</span></div>
+    </div>
+
+    <details>
+      <summary data-i18n="g_d1">Was passiert beim Flashen? Ist das gefährlich?</summary>
+      <div class="body" data-i18n-html="g_d1b"></div>
+    </details>
+    <details>
+      <summary data-i18n="g_d2">Leonardo / Pro Micro: der 8-Sekunden-Bootloader</summary>
+      <div class="body" data-i18n-html="g_d2b"></div>
+    </details>
+    <details>
+      <summary data-i18n="g_d3">Uno / Mega: zwei Chips, die Brücke am ICSP-Header</summary>
+      <div class="body">
+        <div data-i18n-html="g_d3b"></div>
+        <div class="icsp">
+          <svg viewBox="0 0 220 150" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="4" y="4" width="212" height="142" rx="10" fill="none" stroke="var(--line)"/>
+            <rect x="8" y="30" width="48" height="90" rx="6" fill="var(--line)" opacity=".55"/>
+            <text x="32" y="78" font-size="9" text-anchor="middle" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">USB</text>
+            <rect x="76" y="34" width="60" height="82" rx="4" fill="none" stroke="var(--muted)"/>
+            <g fill="var(--muted)">
+              <circle cx="92" cy="50" r="5"/><circle cx="120" cy="50" r="5"/>
+              <circle cx="92" cy="75" r="5"/><circle cx="120" cy="75" r="5"/>
+            </g>
+            <g fill="var(--accent)">
+              <circle cx="92" cy="100" r="6"/><circle cx="120" cy="100" r="6"/>
+            </g>
+            <path d="M92 100 C 92 128, 120 128, 120 100" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+            <g font-size="8.5" font-family="Inter,system-ui,sans-serif" fill="var(--text)">
+              <text x="144" y="53">MISO · VCC</text>
+              <text x="144" y="78">SCK · MOSI</text>
+              <text x="144" y="103" font-weight="700" fill="var(--accent)">RESET · GND</text>
+              <text x="76" y="136" fill="var(--muted)" data-i18n="g_svgedge">Platinenkante</text>
+            </g>
+          </svg>
+          <div class="cap" data-i18n="g_d3cap">6-Pin-ICSP-Header des USB-Chips (direkt neben der USB-Buchse, nicht der große Header beim Hauptchip). Die beiden Pins zur Platinenkante hin sind RESET und GND – diese kurz mit einem Draht oder einer Pinzette brücken, während das Board am USB hängt. Das Board meldet sich dann als „ATmega16U2 DFU“.</div>
+        </div>
+      </div>
+    </details>
+    <details>
+      <summary data-i18n="g_d4">Windows: WinUSB-Treiber für DFU (einmalig, nur Uno/Mega/Breakout)</summary>
+      <div class="body" data-i18n-html="g_d4b"></div>
+    </details>
+    <details>
+      <summary data-i18n="g_d5">Linux und macOS</summary>
+      <div class="body" data-i18n-html="g_d5b"></div>
+    </details>
+    <details>
+      <summary data-i18n="g_d6">Zurück zum normalen Arduino</summary>
+      <div class="body" data-i18n-html="g_d6b"></div>
+    </details>
+    <details>
+      <summary data-i18n="g_d7">Fehlersuche</summary>
+      <div class="body" data-i18n-html="g_d7b"></div>
+    </details>
   </div>
 
   <div class="card">
@@ -71,6 +155,7 @@ a { color: var(--blue); }
     <h2 data-i18n="logtitle">Protokoll</h2>
     <div class="progress" id="progress"><b></b></div>
     <div id="logstatus" class="status">–</div>
+    <div id="nextstep" class="row" style="margin:8px 0"><a class="btn primary" href="config.html" data-i18n="nextstep">Weiter: Board im Konfigurations-Tool einrichten →</a></div>
     <textarea id="log" readonly></textarea>
     <div class="row" style="margin-top:8px">
       <button id="clearlog" class="small" data-i18n="clearlog">Leeren</button>
@@ -123,6 +208,29 @@ const I18N = {
     boardhint_mega:'Zwei Chips: zuerst der 2560 (seriell), dann der 16U2 (DFU).', boardhint_breakout:'Ein Chip, Atmel-DFU-Bootloader (WebUSB).',
     warn_uno:'Welcher USB-Chip? Steht auf dem kleinen Chip neben der USB-Buchse: „MEGA16U2“ → Uno R3, „MEGA8U2“ → Uno R1/R2. Die falsche Datei startet nach dem Flashen nicht in den Bootloader zurück.',
     warn_order:'Reihenfolge beachten: Nach dem USB-Chip gibt es keinen seriellen Port mehr. Soll der Hauptchip später nochmal geflasht werden, braucht es einen ISP-Programmer oder den Rückweg über die Original-USB-Firmware.',
+    nextstep:'Weiter: Board im Konfigurations-Tool einrichten →',
+    g_title:'So funktioniert es',
+    g_o1:'Browser', g_o1t:'Edge oder Chrome am PC; Board per USB anschließen (Datenkabel, kein Ladekabel).',
+    g_o2:'Board wählen', g_o2t:'Unten das Board auswählen – die Seite zeigt die passenden Schritte und Dateien.',
+    g_o3:'Bootloader', g_o3t:'Das Board in den Bootloader bringen: Reset, Brücke am ICSP-Header oder der HID-Knopf unten.',
+    g_o4:'Flashen', g_o4t:'Auf den orangen Knopf klicken, Port bzw. Gerät im Dialog wählen, fertig – die Seite prüft den Flash.',
+    g_o5:'Einrichten', g_o5t:'Danach im Konfigurations-Tool Pins, Taster, Achsen und Strip zuweisen.',
+    g_d1:'Was passiert beim Flashen? Ist das gefährlich?',
+    g_d1b:'<p>Die Seite lädt die passende Firmware-Datei (.hex) von dieser Webseite, spricht den <b>Bootloader</b> des Chips an (das kleine Programm, das auf jedem Arduino ab Werk drauf ist), löscht den Programmspeicher, schreibt die Firmware und liest sie zur Kontrolle zurück. Der Bootloader selbst wird nicht angefasst – ein fehlgeschlagener Versuch lässt sich daher immer wiederholen. Es werden keine Daten an einen Server geschickt; alles läuft im Browser.</p><p>Was danach anders ist: Das Board meldet sich am PC nicht mehr als „Arduino“, sondern als <b>LWCloneU2</b> (Tastatur, Joystick, LED-Wiz). Beim Uno/Mega gibt es nach dem Flashen des USB-Chips <b>keinen seriellen Port mehr</b>. Der Weg zurück ist jederzeit möglich (siehe „Zurück zum normalen Arduino“).</p>',
+    g_d2:'Leonardo / Pro Micro: der 8-Sekunden-Bootloader',
+    g_d2b:'<p>Diese Boards haben einen Chip (ATmega32U4) mit dem Bootloader <b>Caterina</b>. Er läuft nach einem Reset nur <b>8 Sekunden</b> und meldet sich in dieser Zeit als eigener serieller Port („Arduino Leonardo bootloader“) – oft mit einer anderen COM-Nummer als der normale Port.</p><ol><li><b>Neues Board oder ein Arduino-Sketch läuft:</b> einfach „Port wählen und flashen“ klicken und den Arduino-Port wählen. Die Seite erkennt, dass kein Bootloader antwortet, und startet ihn über den 1200-Baud-Trick (wie die Arduino-IDE). Dann erscheint der Port-Dialog erneut: jetzt den <b>Bootloader-Port</b> wählen. Wer zu langsam ist, drückt Reset und versucht es noch einmal.</li><li><b>LWCloneU2 läuft schon:</b> unten „Gerät wählen und Bootloader starten“ klicken (schickt den Befehl per USB-HID), dann innerhalb von 8 s „Port wählen und flashen“.</li><li><b>Immer möglich:</b> die Reset-Taste des Boards zweimal kurz drücken (Pro Micro: RST kurz zweimal gegen GND) – der Bootloader läuft dann 8 s.</li></ol><p>Die Seite schreibt und prüft etwa 13 KB; das dauert rund 5–10 Sekunden. Danach startet die neue Firmware von selbst.</p>',
+    g_d3:'Uno / Mega: zwei Chips, die Brücke am ICSP-Header',
+    g_d3b:'<p>Uno und Mega haben <b>zwei Mikrocontroller</b>: den Hauptchip (ATmega328P bzw. ATmega2560) und einen kleinen USB-Chip (ATmega16U2, bei alten Unos ATmega8U2), der ab Werk nur USB-Seriell-Wandler ist. LWCloneU2 braucht beide: der Hauptchip macht Ausgänge, Taster und Strip, der USB-Chip spricht USB.</p><ol><li><b>Zuerst der Hauptchip</b> über den noch originalen USB-Chip: „Port wählen und flashen“, den Arduino-Port wählen. Die Seite setzt das Board per DTR zurück und spricht den Arduino-Bootloader an (optiboot bzw. STK500v2). Etwa 10 Sekunden.</li><li><b>Dann der USB-Chip per DFU:</b> Board angeschlossen lassen, die beiden Pins <b>RESET und GND</b> am kleinen ICSP-Header neben der USB-Buchse eine Sekunde brücken (Zeichnung unten). Der PC erkennt ein neues Gerät „ATmega16U2 DFU“ (Windows: einmalig WinUSB-Treiber, siehe nächster Punkt). Dann „DFU-Gerät wählen und flashen“.</li></ol><p>Nach dem zweiten Schritt startet der USB-Chip neu, und das Board ist ein LWCloneU2. Bei einem Uno unbedingt vorher prüfen, ob „MEGA16U2“ oder „MEGA8U2“ auf dem kleinen Chip steht, und oben das passende Board wählen.</p>',
+    g_d3cap:'6-Pin-ICSP-Header des USB-Chips (direkt neben der USB-Buchse, nicht der große Header beim Hauptchip). Die beiden Pins zur Platinenkante hin sind RESET und GND – diese kurz mit einem Draht oder einer Pinzette brücken, während das Board am USB hängt. Das Board meldet sich dann als „ATmega16U2 DFU“.',
+    g_svgedge:'Platinenkante',
+    g_d4:'Windows: WinUSB-Treiber für DFU (einmalig, nur Uno/Mega/Breakout)',
+    g_d4b:'<p>Für den DFU-Modus bindet Windows keinen passenden Treiber, deshalb kann der Browser das Gerät nicht öffnen („Zugriff verweigert“ oder es taucht im Dialog nicht auf). Einmalig den WinUSB-Treiber zuweisen:</p><ol><li><a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a> herunterladen und starten (keine Installation nötig).</li><li>Das Board in den DFU-Modus bringen (Brücke RESET–GND).</li><li>In Zadig: <b>Options → List All Devices</b> anhaken, in der Liste „ATmega16U2 DFU“ (bzw. 8U2/32U2) wählen.</li><li>Als Zieltreiber <b>WinUSB</b> einstellen und „Install Driver“ (bzw. „Replace Driver“) klicken.</li><li>Zurück zu dieser Seite, „DFU-Gerät wählen und flashen“.</li></ol><p>Hinweis: Atmel FLIP funktioniert mit WinUSB nicht mehr; wer es wieder braucht, setzt den Treiber im Geräte-Manager zurück. Für den Leonardo/Pro Micro ist kein Treiber nötig.</p>',
+    g_d5:'Linux und macOS',
+    g_d5b:'<p><b>Linux:</b> der Benutzer muss die Geräte öffnen dürfen. Datei <code>/etc/udev/rules.d/60-lwcloneu2.rules</code> anlegen:</p><pre>SUBSYSTEM=="usb", ATTRS{idVendor}=="03eb", MODE="0666"\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="fafa", MODE="0666"</pre><p>dann <code>sudo udevadm control --reload</code> und das Board neu einstecken. Für die seriellen Ports muss der Benutzer in der Gruppe <code>dialout</code> (Debian/Ubuntu) bzw. <code>uucp</code> (Arch) sein.</p><p><b>macOS:</b> nichts nötig. Beim ersten Zugriff fragt der Browser nach der Erlaubnis.</p>',
+    g_d6:'Zurück zum normalen Arduino',
+    g_d6b:'<p><b>Leonardo / Pro Micro:</b> einfach einen Sketch mit der Arduino-IDE hochladen – der Bootloader ist unverändert. Läuft LWCloneU2, vorher Reset doppelt drücken oder den HID-Knopf unten nutzen.</p><p><b>Uno / Mega:</b> den USB-Chip per DFU wieder mit der Original-Firmware flashen: Datei <span class="chip">UNO-dfu_and_usbserial_combined.hex</span> bzw. <span class="chip">MEGA2560-dfu_and_usbserial_combined.hex</span> aus der Arduino-IDE (Ordner <span class="chip">hardware/arduino/avr/firmwares/atmegaxxu2/</span>), hier unter „Eigene Hex-Datei“ beim USB-Chip-Schritt auswählen. Danach lässt sich der Hauptchip wieder normal mit der Arduino-IDE beschreiben.</p>',
+    g_d7:'Fehlersuche',
+    g_d7b:'<table class="ts"><tr><td>Kein Port im Dialog</td><td>Datenkabel? Anderer USB-Anschluss? Leonardo: Bootloader-Fenster (8 s) verpasst – Reset doppelt drücken und sofort klicken. Windows: Geräte-Manager prüfen, ob ein COM-Port erscheint.</td></tr><tr><td>„kein Port gewählt“</td><td>Dialog abgebrochen oder leer – siehe oben.</td></tr><tr><td>„keine Antwort vom Bootloader“</td><td>Falsches Board gewählt; ein anderes Programm (Arduino-IDE, serieller Monitor, Pinball-Software) hält den Port; Uno/Mega: der USB-Chip hat schon LWCloneU2 statt der Original-Firmware.</td></tr><tr><td>„falscher Chip“</td><td>Board-Auswahl prüfen: Uno R3 (16U2) oder R1/R2 (8U2)? Leonardo statt Pro Micro ist egal (gleicher Chip), aber Micro ≠ Uno.</td></tr><tr><td>DFU-Gerät fehlt / Zugriff verweigert</td><td>Windows: WinUSB-Treiber per Zadig (siehe oben). Linux: udev-Regel. Brücke RESET–GND wirklich am kleinen Header neben der USB-Buchse?</td></tr><tr><td>„Prüfung fehlgeschlagen“</td><td>Übertragungsfehler – noch einmal flashen, anderes Kabel/Hub-freier Anschluss.</td></tr><tr><td>Board meldet sich danach nicht</td><td>Aus- und wieder einstecken. Windows braucht beim ersten Mal einige Sekunden für die drei HID-Geräte. Im Konfigurations-Tool „Verbinden“ klicken.</td></tr><tr><td>Firefox / Safari</td><td>Unterstützen kein Web Serial / WebUSB – Edge oder Chrome verwenden.</td></tr></table><p class="hint">Bei allem anderen: den Text aus dem Protokollfenster unten kopieren und als GitHub-Issue melden.</p>',
   },
   en: {
     subtitle:'Flash firmware', toconfig:'Configuration tool →',
@@ -157,6 +265,29 @@ const I18N = {
     boardhint_mega:'Two chips: first the 2560 (serial), then the 16U2 (DFU).', boardhint_breakout:'One chip, Atmel DFU bootloader (WebUSB).',
     warn_uno:'Which USB chip? It is printed on the small chip next to the USB socket: “MEGA16U2” → Uno R3, “MEGA8U2” → Uno R1/R2. The wrong file will not return to the bootloader after flashing.',
     warn_order:'Mind the order: after the USB chip there is no serial port any more. To flash the main chip again later you need an ISP programmer or the way back via the original USB firmware.',
+    nextstep:'Next: set up the board in the configuration tool →',
+    g_title:'How it works',
+    g_o1:'Browser', g_o1t:'Edge or Chrome on a PC; connect the board via USB (data cable, not a charge-only cable).',
+    g_o2:'Pick the board', g_o2t:'Select your board below – the page shows the matching steps and files.',
+    g_o3:'Bootloader', g_o3t:'Put the board into its bootloader: reset, the bridge on the ICSP header, or the HID button below.',
+    g_o4:'Flash', g_o4t:'Click the orange button, pick the port or device in the dialog, done – the page verifies the flash.',
+    g_o5:'Configure', g_o5t:'Then assign pins, buttons, axes and the strip in the configuration tool.',
+    g_d1:'What happens when flashing? Is it risky?',
+    g_d1b:'<p>The page loads the matching firmware file (.hex) from this site, talks to the chip\'s <b>bootloader</b> (the small program every Arduino ships with), erases the program memory, writes the firmware and reads it back to verify. The bootloader itself is never touched – a failed attempt can always be repeated. No data is sent to any server; everything runs in the browser.</p><p>What changes afterwards: the board no longer shows up as an "Arduino" but as <b>LWCloneU2</b> (keyboard, joystick, LED-Wiz). On the Uno/Mega there is <b>no serial port any more</b> once the USB chip is flashed. The way back is always possible (see "Back to a normal Arduino").</p>',
+    g_d2:'Leonardo / Pro Micro: the 8-second bootloader',
+    g_d2b:'<p>These boards have one chip (ATmega32U4) with the <b>Caterina</b> bootloader. After a reset it runs for only <b>8 seconds</b> and shows up as its own serial port ("Arduino Leonardo bootloader") during that time – often with a different COM number than the normal port.</p><ol><li><b>New board or an Arduino sketch running:</b> just click "Choose port and flash" and pick the Arduino port. The page notices that no bootloader answers and starts it with the 1200 baud touch (like the Arduino IDE). The port dialog then appears again: now pick the <b>bootloader port</b>. Too slow? Press reset and try again.</li><li><b>LWCloneU2 already running:</b> click "Choose device and start bootloader" below (sends the command via USB HID), then "Choose port and flash" within 8 s.</li><li><b>Always works:</b> press the board\'s reset button twice quickly (Pro Micro: short RST to GND twice) – the bootloader then runs for 8 s.</li></ol><p>The page writes and verifies about 13 KB; that takes 5–10 seconds. The new firmware then starts by itself.</p>',
+    g_d3:'Uno / Mega: two chips, the bridge on the ICSP header',
+    g_d3b:'<p>Uno and Mega have <b>two microcontrollers</b>: the main chip (ATmega328P or ATmega2560) and a small USB chip (ATmega16U2, ATmega8U2 on old Unos) that is only a USB-serial converter from the factory. LWCloneU2 needs both: the main chip handles outputs, buttons and strip, the USB chip speaks USB.</p><ol><li><b>Main chip first</b>, through the still original USB chip: "Choose port and flash", pick the Arduino port. The page resets the board via DTR and talks to the Arduino bootloader (optiboot or STK500v2). About 10 seconds.</li><li><b>Then the USB chip via DFU:</b> leave the board connected, bridge the two pins <b>RESET and GND</b> on the small ICSP header next to the USB socket for a second (drawing below). The PC detects a new device "ATmega16U2 DFU" (Windows: WinUSB driver once, see next item). Then "Choose DFU device and flash".</li></ol><p>After the second step the USB chip restarts and the board is an LWCloneU2. On an Uno, check first whether the small chip says "MEGA16U2" or "MEGA8U2" and pick the matching board above.</p>',
+    g_d3cap:'6-pin ICSP header of the USB chip (right next to the USB socket, not the big header near the main chip). The two pins towards the board edge are RESET and GND – bridge them briefly with a wire or tweezers while the board is connected. The board then shows up as "ATmega16U2 DFU".',
+    g_svgedge:'board edge',
+    g_d4:'Windows: WinUSB driver for DFU (once, Uno/Mega/breakout only)',
+    g_d4b:'<p>Windows binds no suitable driver for DFU mode, so the browser cannot open the device ("access denied" or it is missing from the dialog). Assign the WinUSB driver once:</p><ol><li>Download and run <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a> (no installation needed).</li><li>Put the board into DFU mode (bridge RESET–GND).</li><li>In Zadig: tick <b>Options → List All Devices</b>, pick "ATmega16U2 DFU" (or 8U2/32U2) in the list.</li><li>Set the target driver to <b>WinUSB</b> and click "Install Driver" (or "Replace Driver").</li><li>Back to this page, "Choose DFU device and flash".</li></ol><p>Note: Atmel FLIP no longer works with WinUSB; if you need it again, roll back the driver in Device Manager. Leonardo/Pro Micro need no driver.</p>',
+    g_d5:'Linux and macOS',
+    g_d5b:'<p><b>Linux:</b> the user must be allowed to open the devices. Create <code>/etc/udev/rules.d/60-lwcloneu2.rules</code>:</p><pre>SUBSYSTEM=="usb", ATTRS{idVendor}=="03eb", MODE="0666"\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="fafa", MODE="0666"</pre><p>then <code>sudo udevadm control --reload</code> and replug the board. For the serial ports the user must be in the <code>dialout</code> (Debian/Ubuntu) or <code>uucp</code> (Arch) group.</p><p><b>macOS:</b> nothing needed. The browser asks for permission on first access.</p>',
+    g_d6:'Back to a normal Arduino',
+    g_d6b:'<p><b>Leonardo / Pro Micro:</b> just upload a sketch with the Arduino IDE – the bootloader is unchanged. If LWCloneU2 is running, double-tap reset first or use the HID button below.</p><p><b>Uno / Mega:</b> flash the USB chip via DFU with its original firmware again: file <span class="chip">UNO-dfu_and_usbserial_combined.hex</span> or <span class="chip">MEGA2560-dfu_and_usbserial_combined.hex</span> from the Arduino IDE (folder <span class="chip">hardware/arduino/avr/firmwares/atmegaxxu2/</span>), selected here under "own hex file" in the USB chip step. The main chip can then be programmed normally with the Arduino IDE again.</p>',
+    g_d7:'Troubleshooting',
+    g_d7b:'<table class="ts"><tr><td>No port in the dialog</td><td>Data cable? Another USB port? Leonardo: missed the 8 s bootloader window – double-tap reset and click right away. Windows: check Device Manager for a COM port.</td></tr><tr><td>"no port chosen"</td><td>Dialog cancelled or empty – see above.</td></tr><tr><td>"no reply from bootloader"</td><td>Wrong board selected; another program (Arduino IDE, serial monitor, pinball software) holds the port; Uno/Mega: the USB chip already runs LWCloneU2 instead of the original firmware.</td></tr><tr><td>"wrong chip"</td><td>Check the board selection: Uno R3 (16U2) or R1/R2 (8U2)? Leonardo vs. Pro Micro does not matter (same chip), but Micro ≠ Uno.</td></tr><tr><td>DFU device missing / access denied</td><td>Windows: WinUSB driver via Zadig (see above). Linux: udev rule. Is the RESET–GND bridge really on the small header next to the USB socket?</td></tr><tr><td>"verify failed"</td><td>Transfer error – flash again, try another cable or a port without a hub.</td></tr><tr><td>Board does not show up afterwards</td><td>Unplug and replug. Windows needs a few seconds the first time for the three HID devices. Click "Connect" in the configuration tool.</td></tr><tr><td>Firefox / Safari</td><td>No Web Serial / WebUSB support – use Edge or Chrome.</td></tr></table><p class="hint">For anything else: copy the text from the log window below and report it as a GitHub issue.</p>',
   }
 };
 let lang = 'de';
@@ -165,6 +296,7 @@ const t = (k, vars) => { let s = I18N[lang][k] ?? I18N.de[k] ?? k; if (vars) for
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
   document.getElementById('langbtn').textContent = lang === 'de' ? 'EN' : 'DE';
   renderBoard(); renderDownloads(); renderBadge();
 }
@@ -496,7 +628,7 @@ async function getImage(boardId, step) {
 async function startFlash(boardId, idx) {
   if (busy) return;
   const step = { ...BOARDS[boardId].steps[idx], idx, boardId };
-  busy = true; renderBoard(); setProgress(0); setStatus(t('st_running'));
+  busy = true; renderBoard(); setProgress(0); setStatus(t('st_running')); document.getElementById('nextstep').style.display = 'none';
   log(`\n=== ${new Date().toLocaleTimeString()} ${boardId} / ${step.mcu} / ${step.method}`);
   try {
     const img = await getImage(boardId, step);
@@ -504,7 +636,7 @@ async function startFlash(boardId, idx) {
     if (step.method === 'dfu') await runDfu(img, step.mcu);
     else await runSerial(img, step);
     if (touchPending) { setStatus(t('st_touch')); setProgress(0.03); }
-    else { setProgress(1, 'ok'); setStatus(t('st_ok'), 'ok'); }
+    else { setProgress(1, 'ok'); setStatus(t('st_ok'), 'ok'); document.getElementById('nextstep').style.display = ''; }
   } catch (e) {
     log('FEHLER / ERROR: ' + (e.message || e)); setProgress(1, 'err'); setStatus(t('st_err', { e: e.message || e }), 'err');
   } finally { busy = false; renderBoard(); }

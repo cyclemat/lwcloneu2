@@ -111,7 +111,10 @@ Stand: 24.11.2026
 - An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno,
   Online-Flasher (alle 4 Protokolle), Bootloader-Befehl 66 (Caterina-Schlüssel, DFU-Sprung).
 - GitHub Actions nur `workflow_dispatch` – erster Lauf nach Push auf Ansage des Nutzers.
-- GitHub Pages für `docs/` aktivieren (nach Push, auf Ansage) – dann ist https://cyclemat.github.io/lwcloneu2/ erreichbar.
+- GitHub Pages für `docs/` ist seit 24.11.2026 aktiv (per `gh api … /pages`, Quelle master//docs; Nutzer-OK „ja“).
+  https_enforced noch false – nach dem ersten Zertifikat per `gh api -X PUT repos/cyclemat/lwcloneu2/pages -F https_enforced=true` setzen.
+- Flasher-Anleitung (24.11.2026, Nutzerwunsch „online flasher mit anleitung“): Karte „So funktioniert es“ in
+  `docs/flash.html` mit `<details>`-Abschnitten, Texte als HTML in I18N (`data-i18n-html`), SVG des ICSP-Headers.
 - DLL braucht UCRT (Windows 10+; auf Windows 7 UCRT-Update). Für eine MSVC-DLL: CI-Workflow (windows-latest).
 - Webtool: Encoder-Eingänge werden nicht entprellt (wie Upstream), Joystick-Tasten 9–16 nicht vorgesehen.
 - Mögliche Erweiterungen: PWM-Hardwarekanäle, mehr als 32 Eingänge auf dem Mega (CFG_NUM_INPUTS pro Board),

@@ -21,6 +21,13 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
   (`firmware/publish.sh`). **Testfunktion – ohne Hardware nur im Headless-Browser geprüft.**
   **Web flasher** (`docs/flash.html`): flash from Edge/Chrome – Web Serial for Caterina/AVR109, optiboot/STK500 v1,
   STK500 v2; WebUSB for Atmel DFU. Verify, chip check, own hex file, "start bootloader via HID". Untested on hardware.
+- Flasher mit eingebauter **Anleitung**: Überblick in fünf Schritten, aufklappbare Abschnitte (Was passiert beim
+  Flashen, 8-Sekunden-Bootloader, Uno/Mega mit Zeichnung des ICSP-Headers für die RESET–GND-Brücke, WinUSB per Zadig,
+  Linux/macOS, zurück zum Arduino, Fehlersuche-Tabelle) und Weiterleitung zum Konfigurations-Tool nach Erfolg.
+  Flasher with built-in **guide**: five-step overview, collapsible sections (what happens, 8-second bootloader,
+  Uno/Mega with ICSP header drawing, WinUSB via Zadig, Linux/macOS, back to Arduino, troubleshooting table), link to the
+  configuration tool after success.
+- Webseite unter <https://cyclemat.github.io/lwcloneu2/> (GitHub Pages aus `docs/`). / Web page on GitHub Pages.
 - **DOF steuert den Strip direkt** (Leonardo/Pro Micro): das Board meldet sich zusätzlich als virtueller COM-Port
   (CDC-ACM, kein Treiber ab Windows 10) und spricht dort das Protokoll des DOF-**TeensyStripControllers** mit einem
   Kanal (`firmware/strip_serial.c`, Befehle L/M/V/C/O/R/F, 'A'/'N'). In der Cabinet.xml genügt ein
