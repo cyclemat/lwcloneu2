@@ -1,6 +1,7 @@
 /*
- * LWCloneU2
- * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * LWCloneU2 – Arduino Mega 2560 (ATmega2560)
+ *
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,101 +10,97 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+/*
+ * Pin-Index = Arduino-Nummer: 0..53 = D0..D53, 54..69 = A0..A15.
+ * D0/D1 sind die UART0-Verbindung zum ATmega16U2 (USB) und daher gesperrt.
+ * D0/D1 are the UART0 link to the ATmega16U2 (USB) and therefore reserved.
+ */
 
-#define LED_MAPPING_TABLE(_map_) \
-	\
-	_map_( A, 0, 0 ) /* ( AD0 )               Digital pin 22 */ \
-	_map_( A, 1, 0 ) /* ( AD1 )               Digital pin 23 */ \
-	_map_( A, 2, 0 ) /* ( AD2 )               Digital pin 24 */ \
-	_map_( A, 3, 0 ) /* ( AD3 )               Digital pin 25 */ \
-	_map_( A, 4, 0 ) /* ( AD4 )               Digital pin 26 */ \
-	_map_( A, 5, 0 ) /* ( AD5 )               Digital pin 27 */ \
-	_map_( A, 6, 0 ) /* ( AD6 )               Digital pin 28 */ \
-	_map_( A, 7, 0 ) /* ( AD7 )               Digital pin 29 */ \
-	_map_( C, 7, 0 ) /* ( A15 )               Digital pin 30 */ \
-	_map_( C, 6, 0 ) /* ( A14 )               Digital pin 31 */ \
-	_map_( C, 5, 0 ) /* ( A13 )               Digital pin 32 */ \
-	_map_( C, 4, 0 ) /* ( A12 )               Digital pin 33 */ \
-	_map_( C, 3, 0 ) /* ( A11 )               Digital pin 34 */ \
-	_map_( C, 2, 0 ) /* ( A10 )               Digital pin 35 */ \
-	_map_( C, 1, 0 ) /* ( A9 )                Digital pin 36 */ \
-	_map_( C, 0, 0 ) /* ( A8 )                Digital pin 37 */ \
-	_map_( D, 7, 0 ) /* ( T0 )                Digital pin 38 */ \
-	_map_( G, 2, 0 ) /* ( ALE )               Digital pin 39 */ \
-	_map_( G, 1, 0 ) /* ( RD )                Digital pin 40 */ \
-	_map_( G, 0, 0 ) /* ( WR )                Digital pin 41 */ \
-	_map_( L, 7, 0 ) /*                       Digital pin 42 */ \
-	_map_( L, 6, 0 ) /*                       Digital pin 43 */ \
-	_map_( L, 5, 0 ) /* ( OC5C )              Digital pin 44 (PWM) */ \
-	_map_( L, 4, 0 ) /* ( OC5B )              Digital pin 45 (PWM) */ \
-	_map_( L, 3, 0 ) /* ( OC5A )              Digital pin 46 (PWM) */ \
-	_map_( L, 2, 0 ) /* ( T5 )                Digital pin 47 */ \
-	_map_( L, 1, 0 ) /* ( ICP5 )              Digital pin 48 */ \
-	_map_( L, 0, 0 ) /* ( ICP4 )              Digital pin 49 */ \
-	_map_( B, 3, 0 ) /* ( MISO/PCINT3 )       Digital pin 50 (MISO) */ \
-	_map_( B, 2, 0 ) /* ( MOSI/PCINT2 )       Digital pin 51 (MOSI) */ \
-	_map_( B, 1, 0 ) /* ( SCK/PCINT1 )        Digital pin 52 (SCK) */ \
-	_map_( B, 0, 0 ) /* ( SS/PCINT0 )         Digital pin 53 (SS) */ \
-	\
+#ifndef PINMAP_H__INCLUDED
+#define PINMAP_H__INCLUDED
+
+#define BOARD_ID            BOARD_ARDUINO_MEGA2560
+#define WS2812_MAX_PIXELS   128
+#define BOARD_HAS_ADC       1
+
+#define BOARD_PIN_TABLE(_m_) \
+	_m_( X, 0, PIN_NO_ADC ) /*  0 D0  RX0 – reserviert / reserved */ \
+	_m_( X, 0, PIN_NO_ADC ) /*  1 D1  TX0 – reserviert / reserved */ \
+	_m_( E, 4, PIN_NO_ADC ) /*  2 D2  */ \
+	_m_( E, 5, PIN_NO_ADC ) /*  3 D3  */ \
+	_m_( G, 5, PIN_NO_ADC ) /*  4 D4  */ \
+	_m_( E, 3, PIN_NO_ADC ) /*  5 D5  */ \
+	_m_( H, 3, PIN_NO_ADC ) /*  6 D6  */ \
+	_m_( H, 4, PIN_NO_ADC ) /*  7 D7  */ \
+	_m_( H, 5, PIN_NO_ADC ) /*  8 D8  */ \
+	_m_( H, 6, PIN_NO_ADC ) /*  9 D9  */ \
+	_m_( B, 4, PIN_NO_ADC ) /* 10 D10 */ \
+	_m_( B, 5, PIN_NO_ADC ) /* 11 D11 */ \
+	_m_( B, 6, PIN_NO_ADC ) /* 12 D12 */ \
+	_m_( B, 7, PIN_NO_ADC ) /* 13 D13 LED */ \
+	_m_( J, 1, PIN_NO_ADC ) /* 14 D14 TX3 */ \
+	_m_( J, 0, PIN_NO_ADC ) /* 15 D15 RX3 */ \
+	_m_( H, 1, PIN_NO_ADC ) /* 16 D16 TX2 */ \
+	_m_( H, 0, PIN_NO_ADC ) /* 17 D17 RX2 */ \
+	_m_( D, 3, PIN_NO_ADC ) /* 18 D18 TX1 */ \
+	_m_( D, 2, PIN_NO_ADC ) /* 19 D19 RX1 */ \
+	_m_( D, 1, PIN_NO_ADC ) /* 20 D20 SDA */ \
+	_m_( D, 0, PIN_NO_ADC ) /* 21 D21 SCL */ \
+	_m_( A, 0, PIN_NO_ADC ) /* 22 D22 */ \
+	_m_( A, 1, PIN_NO_ADC ) /* 23 D23 */ \
+	_m_( A, 2, PIN_NO_ADC ) /* 24 D24 */ \
+	_m_( A, 3, PIN_NO_ADC ) /* 25 D25 */ \
+	_m_( A, 4, PIN_NO_ADC ) /* 26 D26 */ \
+	_m_( A, 5, PIN_NO_ADC ) /* 27 D27 */ \
+	_m_( A, 6, PIN_NO_ADC ) /* 28 D28 */ \
+	_m_( A, 7, PIN_NO_ADC ) /* 29 D29 */ \
+	_m_( C, 7, PIN_NO_ADC ) /* 30 D30 */ \
+	_m_( C, 6, PIN_NO_ADC ) /* 31 D31 */ \
+	_m_( C, 5, PIN_NO_ADC ) /* 32 D32 */ \
+	_m_( C, 4, PIN_NO_ADC ) /* 33 D33 */ \
+	_m_( C, 3, PIN_NO_ADC ) /* 34 D34 */ \
+	_m_( C, 2, PIN_NO_ADC ) /* 35 D35 */ \
+	_m_( C, 1, PIN_NO_ADC ) /* 36 D36 */ \
+	_m_( C, 0, PIN_NO_ADC ) /* 37 D37 */ \
+	_m_( D, 7, PIN_NO_ADC ) /* 38 D38 */ \
+	_m_( G, 2, PIN_NO_ADC ) /* 39 D39 */ \
+	_m_( G, 1, PIN_NO_ADC ) /* 40 D40 */ \
+	_m_( G, 0, PIN_NO_ADC ) /* 41 D41 */ \
+	_m_( L, 7, PIN_NO_ADC ) /* 42 D42 */ \
+	_m_( L, 6, PIN_NO_ADC ) /* 43 D43 */ \
+	_m_( L, 5, PIN_NO_ADC ) /* 44 D44 */ \
+	_m_( L, 4, PIN_NO_ADC ) /* 45 D45 */ \
+	_m_( L, 3, PIN_NO_ADC ) /* 46 D46 */ \
+	_m_( L, 2, PIN_NO_ADC ) /* 47 D47 */ \
+	_m_( L, 1, PIN_NO_ADC ) /* 48 D48 */ \
+	_m_( L, 0, PIN_NO_ADC ) /* 49 D49 */ \
+	_m_( B, 3, PIN_NO_ADC ) /* 50 D50 MISO */ \
+	_m_( B, 2, PIN_NO_ADC ) /* 51 D51 MOSI */ \
+	_m_( B, 1, PIN_NO_ADC ) /* 52 D52 SCK  */ \
+	_m_( B, 0, PIN_NO_ADC ) /* 53 D53 SS   */ \
+	_m_( F, 0, 0x00       ) /* 54 A0  */ \
+	_m_( F, 1, 0x01       ) /* 55 A1  */ \
+	_m_( F, 2, 0x02       ) /* 56 A2  */ \
+	_m_( F, 3, 0x03       ) /* 57 A3  */ \
+	_m_( F, 4, 0x04       ) /* 58 A4  */ \
+	_m_( F, 5, 0x05       ) /* 59 A5  */ \
+	_m_( F, 6, 0x06       ) /* 60 A6  */ \
+	_m_( F, 7, 0x07       ) /* 61 A7  */ \
+	_m_( K, 0, 0x20       ) /* 62 A8  */ \
+	_m_( K, 1, 0x21       ) /* 63 A9  */ \
+	_m_( K, 2, 0x22       ) /* 64 A10 */ \
+	_m_( K, 3, 0x23       ) /* 65 A11 */ \
+	_m_( K, 4, 0x24       ) /* 66 A12 */ \
+	_m_( K, 5, 0x25       ) /* 67 A13 */ \
+	_m_( K, 6, 0x26       ) /* 68 A14 */ \
+	_m_( K, 7, 0x27       ) /* 69 A15 */ \
 	/* end */
 
-#if (USE_MOUSE)
-#define MOUSE_X_CLK_INDEX    9
-#define MOUSE_X_DIR_INDEX   10
-#define MOUSE_Y_CLK_INDEX   11
-#define MOUSE_Y_DIR_INDEX   12
+/* Werkseinstellung: Ausgang 1..32 = D22..D53 (hintere Stiftleiste) / outputs 1..32 = D22..D53 */
+#define BOARD_DEFAULT_OUTPUTS \
+	22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, \
+	38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53
+
 #endif
-
-#define SHIFT_SWITCH_INDEX   13
-
-#define PANEL_MAPPING_TABLE(_map_) \
-	\
-	_map_( E, 4,    MOD_LeftShift,   0                 ) /* ( OC3B/INT4 )         Digital pin 2 (PWM) */ \
-	_map_( E, 5,    MOD_RightShift,  0                 ) /* ( OC3C/INT5 )         Digital pin 3 (PWM) */ \
-	_map_( G, 5,    MOD_LeftControl, 0                 ) /* ( OC0B )              Digital pin 4 (PWM) */ \
-	_map_( E, 3,    MOD_RightControl,0                 ) /* ( OC3A/AIN1 )         Digital pin 5 (PWM) */ \
-	_map_( H, 3,    KEY_Esc,         0                 ) /* ( OC4A )              Digital pin 6 (PWM) */ \
-	_map_( H, 4,    KEY_Enter,       0                 ) /* ( OC4B )              Digital pin 7 (PWM) */ \
-	_map_( H, 5,    KEY_1,           KEY_P             ) /* ( OC4C )              Digital pin 8 (PWM) */ \
-	_map_( H, 6,    KEY_5,           KEY_5             ) /* ( OC2B )              Digital pin 9 (PWM) */ \
-	_map_( B, 4,    KEY_A,           KEY_A             ) /* ( OC2A/PCINT4 )       Digital pin 10 (PWM) */ \
-	_map_( B, 5,    KEY_S,           KEY_S             ) /* ( OC1A/PCINT5 )       Digital pin 11 (PWM) */ \
-	_map_( B, 6,    KEY_D,           KEY_D             ) /* ( OC1B/PCINT6 )       Digital pin 12 (PWM) */ \
-	_map_( B, 7,    J1_Up,           KEY_UpArrow       ) /* ( OC0A/OC1C/PCINT7 )  Digital pin 13 (PWM) */ \
-	_map_( J, 1,    J1_Left,         KEY_LeftArrow     ) /* ( TXD3/PCINT10 )      Digital pin 14 (TX3) */ \
-	_map_( J, 0,    0,               0                 ) /* ( RXD3/PCINT9 )       Digital pin 15 (RX3) */ \
-	_map_( H, 1,    J2_Button5,      0                 ) /* ( TXD2 )              Digital pin 16 (TX2) */ \
-	_map_( H, 0,    J2_Button4,      0                 ) /* ( RXD2 )              Digital pin 17 (RX2) */ \
-	_map_( D, 1,    J2_Button3,      KM_ALT_F4         ) /* ( SDA/INT1 )          Digital pin 20 (SDA) */ \
-	_map_( D, 0,    J2_Button2,      KM_SHIFT_F7       ) /* ( SCL/INT0 )          Digital pin 21 (SCL) */ \
-	_map_( F, 0,    J1_Right,        KEY_RightArrow    ) /* ( ADC0 )              Analog pin 0 */ \
-	_map_( F, 1,    J1_Button1,      KEY_Enter         ) /* ( ADC1 )              Analog pin 1 */ \
-	_map_( F, 4,    J1_Button4,      0                 ) /* ( ADC4/TMK )          Analog pin 4 */ \
-	_map_( F, 5,    J1_Button5,      0                 ) /* ( ADC5/TMS )          Analog pin 5 */ \
-	_map_( F, 6,    J2_Button1,      KEY_F7            ) /* ( ADC6 )              Analog pin 6 */ \
-	_map_( F, 7,    J2_Right,        AC_VolumeUp       ) /* ( ADC7 )              Analog pin 7 */ \
-	_map_( K, 0,    J2_Left,         AC_VolumeDown     ) /* ( ADC8/PCINT16 )      Analog pin 8 */ \
-	_map_( K, 1,    J2_Up,           KEY_PageUp        ) /* ( ADC9/PCINT17 )      Analog pin 9 */ \
-	_map_( K, 2,    J2_Down,         KEY_PageDown      ) /* ( ADC10/PCINT18 )     Analog pin 10 */ \
-	_map_( K, 3,    J1_Down,         KEY_DownArrow     ) /* ( ADC11/PCINT19 )     Analog pin 11 */ \
-	_map_( K, 4,    KEY_2,           AC_Mute           ) /* ( ADC12/PCINT20 )     Analog pin 12 */ \
-	_map_( K, 5,    J1_Button8,      0                 ) /* ( ADC13/PCINT21 )     Analog pin 13 */ \
-	_map_( K, 6,    J1_Button7,      0                 ) /* ( ADC14/PCINT22 )     Analog pin 14 */ \
-	_map_( K, 7,    J1_Button6,      0                 ) /* ( ADC15/PCINT23 )     Analog pin 15 */ \
-	\
-	/* end */
-
-
-	// (port, pin, mux, value_min, value_max, joyid, axis
-	// for mega2560, mux is 0x00..0x07 => (ADC0..ADC7) and 0x20..0x27 => (ADC8..ADC15)
-#define ADC_MAPPING_TABLE(_map_) \
-	\
-	_map_( F, 2, 0x02, 0.000, 1.000, ID_Joystick2, 0 ) /* Analog Pin 2 */ \
-	_map_( F, 3, 0x03, 0.000, 1.000, ID_Joystick2, 1 ) /* Analog Pin 3 */ \
-	\
-	/* end */

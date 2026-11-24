@@ -4,6 +4,6 @@ TARGET_PATH    = ./arduino_promicro
 PARENT_PATH    = ./..
 MCU            = atmega32u4
 F_CPU          = 16000000
-LWCLONE_SRC    = ../main_usb.c ../descriptors.c ../comm.c ../led.c ../panel.c ../queue.c ../clock.c
+LWCLONE_SRC    = ../main_usb.c ../descriptors.c ../comm.c ../queue.c ../clock.c ../config.c ../pins.c ../outputs.c ../ws2812.c ../panel.c ../proto.c
 
 include ../lufa.mk

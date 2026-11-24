@@ -1,6 +1,8 @@
 /*
- * LWCloneU2
+ * LWCloneU2 – Arduino Mega 2560, Haupt-MCU ATmega2560 (hinter dem ATmega16U2)
+ *
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,9 +11,6 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #ifndef HWCONFIG_H__INCLUDED
@@ -33,7 +32,7 @@
 
 
 /****************************************
- LED driver config
+ LED driver config (Timer 0, 200 µs)
 ****************************************/
 
 #if defined(ENABLE_LED_DEVICE)
@@ -66,36 +65,28 @@ static void inline led_timer_init(void)
  ADC config
 ****************************************/
 
-#if defined(ENABLE_ANALOG_INPUT)
-
 static void inline ADC_init(void)
 {
-	ADMUX = (1 << REFS0); // VCC with external capacitor on ARef pin
+	ADMUX = (1 << REFS0); // AVCC als Referenz / AVCC as reference
 
 	ADCSRA =
-		(1 << ADEN) | //enable 
-		(1 << ADSC) | //start conversion(s)
-		(1 << ADIE) | // interrupt enable
-		(1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // prescaler 128x
+		(1 << ADEN) |
+		(1 << ADIE) |
+		(1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // prescaler 128
 }
 
-// https://ww1.microchip.com/downloads/en/devicedoc/atmel-2549-8-bit-avr-microcontroller-atmega640-1280-1281-2560-2561_datasheet.pdf
-// page 266 : 25.2.1
+// Datenblatt ATmega2560, 25.2.1: ADC8..15 über MUX5 in ADCSRB (Bit 3)
 #define ADCSRB_MUX5 3
 
 static void inline ADC_setmux(uint8_t mux)
 {
-	ADMUX &= ~0x1F;
-	ADMUX |= mux & 0x1F;
-	ADCSRB &= ~(1 << ADCSRB_MUX5);
-	ADCSRB |= (((mux >> 5) & 0x01) << ADCSRB_MUX5);
+	ADMUX = (uint8_t)((ADMUX & ~0x1F) | (mux & 0x1F));
+	ADCSRB = (uint8_t)((ADCSRB & ~(1 << ADCSRB_MUX5)) | (((mux >> 5) & 0x01) << ADCSRB_MUX5));
 }
-
-#endif
 
 
 /****************************************
- Clock config
+ Clock config (Timer 1, 1 ms)
 ****************************************/
 
 #define CLOCK_COMPARE_MATCH_vect TIMER1_COMPA_vect
@@ -111,7 +102,7 @@ static void inline clock_init(void)
 
 
 /****************************************
- Data UART config
+ Data UART config (UART0 → ATmega16U2)
 ****************************************/
 
 #define DATA_TX_UART_vect   USART0_UDRE_vect
@@ -128,7 +119,7 @@ static void inline data_uart_init(void)
 
 
 /****************************************
- Debug UART config
+ Debug UART config (UART1 = D18/D19)
 ****************************************/
 
 #if defined(DEBUGLEVEL)
@@ -147,7 +138,5 @@ static void inline debug_uart_init(void)
 }
 
 #endif
-
-
 
 #endif

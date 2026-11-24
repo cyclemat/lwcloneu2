@@ -1,6 +1,7 @@
 /*
  * LWCloneU2
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,9 +10,6 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 /* Name: hid_input.h
@@ -20,6 +18,23 @@
  * Creation Date: 2009-09-19
  * Copyright 2009 - 2011 Andreas Oberdorfer
  * License: GNU GPL v2 (see License.txt) or proprietary (CommercialLicense.txt)
+ */
+
+/*
+ * Funktionscodes für Eingänge (cfg_input_t.func). Die Werte sind Teil des USB-Protokolls
+ * und dürfen nicht verschoben werden – das Konfigurations-Tool kennt sie.
+ *
+ * Function codes for inputs (cfg_input_t.func). The values are part of the USB protocol
+ * and must not move – the configuration tool knows them.
+ *
+ *   0x00          keine Funktion / no function
+ *   0x04 .. 0x65  USB-HID-Tastencodes / USB HID keyboard usage codes
+ *   0x70 .. 0x71  Tastenkombinationen / key combos
+ *   0x80 .. 0x87  Modifier
+ *   0x90 .. 0x92  Consumer (Lautstärke) / consumer (volume)
+ *   0x98 .. 0x9A  Maustasten / mouse buttons
+ *   0xA0 .. 0xCF  Joystick 1..4 (je 12: Links, Rechts, Hoch, Runter, Taste 1..8)
+ *   0xF0 .. 0xF4  Sonderfunktionen (Shift, Maus-Encoder) / special (shift, mouse encoder)
  */
 
 #ifndef KEYDEFS_H__INCLUDED
@@ -149,7 +164,7 @@ enum ModifiersCodes
 	MOD_RightAlt,
 	MOD_RightGUI,
 };
-#define ModifierBit(key) (1 << (key - MOD_LeftControl))
+#define ModifierBit(key) (1 << ((key) - MOD_LeftControl))
 
 enum ConsumerCodes
 {
@@ -157,19 +172,20 @@ enum ConsumerCodes
 	AC_VolumeDown,
 	AC_Mute
 };
-#define ConsumerBit(key) (1 << (key - AC_VolumeUp))
+#define ConsumerBit(key) (1 << ((key) - AC_VolumeUp))
 
 enum MouseButtonCodes
 {
-    MB_Left         = 0x98,
-    MB_Right,
-    MB_Middle
+	MB_Left         = 0x98,
+	MB_Right,
+	MB_Middle
 };
-#define MouseButtonBit(key) (1 << (key - MB_Left))
+#define MouseButtonBit(key) (1 << ((key) - MB_Left))
 
 enum JoystickCodes
 {
 	NR_OF_EVENTS_PER_JOY = 12,
+	MAX_JOYSTICKS = 4,
 
 	J1_Left         = 0xA0,
 	J1_Right,
@@ -223,21 +239,19 @@ enum JoystickCodes
 	J4_Button7,
 	J4_Button8,
 
-	AG_Left,
-	AG_Right,
-	AG_Up,
-	AG_Down,
-	AG_Button1,
-	AG_Button2,
-	AG_Button3,
-	AG_Button4,
-	AG_Button5,
-	AG_Button6,
-	AG_Button7,
-	AG_Button8
+	J_END           /* 0xD0 */
 };
-#define JoyButtonBit(key) (0x01 << (key - J1_Button1))
+#define JoyButtonBit(key) (0x01 << ((key) - J1_Button1))
 
+/* Sonderfunktionen / special functions */
+enum SpecialCodes
+{
+	SF_Shift        = 0xF0,  /* Shift-Taste: zweite Belegung aktiv / second mapping active */
+	SF_MouseXClk,            /* Encoder/Trackball X: Clock-Signal */
+	SF_MouseXDir,            /*                      Richtungssignal / direction */
+	SF_MouseYClk,
+	SF_MouseYDir,
+};
 
 
 #endif  // KEYDEFS_H__INCLUDED

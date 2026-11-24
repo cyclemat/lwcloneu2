@@ -1,6 +1,7 @@
 /*
  * LWCloneU2
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,9 +10,6 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 /*
@@ -47,17 +45,27 @@
 #include "descriptors.h"
 #include "panel.h"
 
-#define USB_STRING_TABLE(_map_) \
-	_map_(ManufacturerString_id,  "n/a") \
-	_map_(ProductString_id,       "LWCloneU2 v1.0")
+#if !defined(NUM_JOYSTICKS)
+#define NUM_JOYSTICKS 4
+#endif
 
+#if (NUM_JOYSTICKS < 1) || (NUM_JOYSTICKS > 4)
+#error "NUM_JOYSTICKS muss 1..4 sein / must be 1..4"
+#endif
+
+
+/* ------------------------------------------------------------------ Strings */
+
+#define USB_STRING_TABLE(_map_) \
+	_map_(ManufacturerString_id,  "LWCloneU2") \
+	_map_(ProductString_id,       "LWCloneU2 v2")
 
 typedef enum {
 	LanguageString_id = 0,
 	#define MAP(x, y) x,
 	USB_STRING_TABLE(MAP)
 	#undef MAP
-	SerialNumberString_id
+	SerialNumberString_id,
 } UsbStringsEnum;
 
 static const USB_Descriptor_String_t PROGMEM LanguageString =
@@ -76,12 +84,7 @@ USB_STRING_TABLE(MAP)
 #undef MAP
 
 
-/** HID class report descriptor. This is a special descriptor constructed with values from the
- *  USBIF HID class specification to describe the reports and capabilities of the HID device. This
- *  descriptor is parsed by the host and its contents used to determine what data (and in what encoding)
- *  the device will send, and what it may be sent back from the host. Refer to the HID specification for
- *  more details on HID report descriptors.
- */
+/* ------------------------------------------------------------------ Misc-Schnittstelle (herstellerspezifisch) */
 
 static const USB_Descriptor_HIDReport_Datatype_t PROGMEM MiscReport[] =
 {
@@ -101,38 +104,14 @@ static const USB_Descriptor_HIDReport_Datatype_t PROGMEM MiscReport[] =
 };
 
 
+/* ------------------------------------------------------------------ Panel: Tastatur, Consumer, Joysticks, Maus */
+
 #if defined(ENABLE_PANEL_DEVICE)
-
-#if !defined(USE_KEYBOARD)
-#define USE_KEYBOARD 0
-#endif
-
-#if !defined(USE_CONSUMER)
-#define USE_CONSUMER 0
-#endif
-
-#if !defined(NUM_JOYSTICKS)
-#define NUM_JOYSTICKS 0
-#endif
-
-#if !defined(USE_ACCELGYRO)
-#define USE_ACCELGYRO 0
-#endif
-
-#if !defined(USE_MOUSE)
-#define USE_MOUSE 0
-#endif
 
 enum HID_KeyModifierCodes
 {
 	KEY_LeftControl      = 0xE0,
-	KEY_LeftShift,
-	KEY_LeftAlt,
-	KEY_LeftGUI,
-	KEY_RightControl,
-	KEY_RightShift,
-	KEY_RightAlt,
-	KEY_RightGUI
+	KEY_RightGUI         = 0xE7,
 };
 
 enum HID_ConsumerCodes
@@ -142,10 +121,37 @@ enum HID_ConsumerCodes
 	CKEY_VolumeDown = 0xEA,
 };
 
+/* Joystick: 4 Achsen int8 (X, Y, Z, Rz) + 8 Tasten → 6 Byte inkl. Report-ID (panel.h: JOYSTICK_REPORT_SIZE) */
+#define JOYSTICK_DESCRIPTOR(id) \
+	0x05, 0x01,             /* USAGE_PAGE (Generic Desktop)   */ \
+	0x09, 0x05,             /* USAGE (Gamepad)                */ \
+	0xa1, 0x01,             /* COLLECTION (Application)       */ \
+	0x85, id,               /*   REPORT_ID                    */ \
+	0x09, 0x01,             /*   USAGE (Pointer)              */ \
+	0xa1, 0x00,             /*   COLLECTION (Physical)        */ \
+	0x09, 0x30,             /*     USAGE (X)                  */ \
+	0x09, 0x31,             /*     USAGE (Y)                  */ \
+	0x09, 0x32,             /*     USAGE (Z)                  */ \
+	0x09, 0x35,             /*     USAGE (Rz)                 */ \
+	0x15, 0x81,             /*     LOGICAL_MINIMUM (-127)     */ \
+	0x25, 0x7F,             /*     LOGICAL_MAXIMUM (127)      */ \
+	0x75, 0x08,             /*     REPORT_SIZE (8)            */ \
+	0x95, 0x04,             /*     REPORT_COUNT (4)           */ \
+	0x81, 0x02,             /*     INPUT (Data,Var,Abs)       */ \
+	0xc0,                   /*   END_COLLECTION               */ \
+	0x05, 0x09,             /*   USAGE_PAGE (Button)          */ \
+	0x19, 0x01,             /*   USAGE_MINIMUM (Button 1)     */ \
+	0x29, 0x08,             /*   USAGE_MAXIMUM (Button 8)     */ \
+	0x15, 0x00,             /*   LOGICAL_MINIMUM (0)          */ \
+	0x25, 0x01,             /*   LOGICAL_MAXIMUM (1)          */ \
+	0x75, 0x01,             /*   REPORT_SIZE (1)              */ \
+	0x95, 0x08,             /*   REPORT_COUNT (8)             */ \
+	0x81, 0x02,             /*   INPUT (Data,Var,Abs)         */ \
+	0xc0,                   /* END_COLLECTION                 */
 
-const USB_Descriptor_HIDReport_Datatype_t PROGMEM PanelReport[] =
+static const USB_Descriptor_HIDReport_Datatype_t PROGMEM PanelReport[] =
 {
-	#if (USE_KEYBOARD != 0)
+	/* Tastatur: Modifier + 6 Tasten → 8 Byte / keyboard */
 	0x05, 0x01,             // USAGE_PAGE (Generic Desktop)
 	0x09, 0x06,             // USAGE (Keyboard)
 	0xa1, 0x01,             // COLLECTION (Application)
@@ -165,9 +171,8 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM PanelReport[] =
 	0x29, 0x65,             //   USAGE_MAXIMUM (101)
 	0x81, 0x00,             //   INPUT (Data,Ary,Abs)
 	0xc0,                   // END_COLLECTION
-	#endif
 
-	#if (USE_CONSUMER != 0)
+	/* Consumer: Lauter, Leiser, Stumm → 2 Byte / consumer control */
 	0x05, 0x0C,             // USAGE_PAGE (Consumer Devices)
 	0x09, 0x01,             // USAGE (Consumer Control)
 	0xa1, 0x01,             // COLLECTION (Application)
@@ -185,143 +190,19 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM PanelReport[] =
 	0x95, 0x05,             //   REPORT_COUNT (5)
 	0x81, 0x03,             //   INPUT (Cnst,Var,Abs)
 	0xc0,                   // END_COLLECTION
-	#endif
 
-	#if (NUM_JOYSTICKS >= 1)
-	0x05, 0x01,             // USAGE_PAGE (Generic Desktop)
-	0x09, 0x05,             // USAGE (Gamepad)
-	0xa1, 0x01,             // COLLECTION (Application)
-	0x09, 0x01,             //   USAGE (Pointer)
-	0xa1, 0x00,             //   COLLECTION (Physical)
-	0x85, ID_Joystick1,     //     REPORT_ID (ID_Joystick1)
-	0x09, 0x30,             //     USAGE (X)
-	0x09, 0x31,             //     USAGE (Y)
-	HID_RI_LOGICAL_MINIMUM(16, -2047),
-	HID_RI_LOGICAL_MAXIMUM(16, 2047),
-	0x75, 0x0C,             //     REPORT_SIZE (12)
-	0x95, 0x02,             //     REPORT_COUNT (2)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	HID_RI_LOGICAL_MINIMUM(8, 0),
-	HID_RI_LOGICAL_MAXIMUM(8, 1),
-	0x75, 0x01,             //     REPORT_SIZE (1)
-	0x95, 0x08,             //     REPORT_COUNT (8)
-	0x05, 0x09,             //     USAGE_PAGE (Button)
-	0x19, 0x01,             //     USAGE_MINIMUM (Button 1)
-	0x29, 0x08,             //     USAGE_MAXIMUM (Button 8)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	0xc0,                   //   END_COLLECTION
-	0xc0,                   // END_COLLECTION
-	#endif
-
+	JOYSTICK_DESCRIPTOR(ID_Joystick1)
 	#if (NUM_JOYSTICKS >= 2)
-	0x05, 0x01,             // USAGE_PAGE (Generic Desktop)
-	0x09, 0x05,             // USAGE (Gamepad)
-	0xa1, 0x01,             // COLLECTION (Application)
-	0x09, 0x01,             //   USAGE (Pointer)
-	0xa1, 0x00,             //   COLLECTION (Physical)
-	0x85, ID_Joystick2,     //     REPORT_ID (ID_Joystick2)
-	0x09, 0x30,             //     USAGE (X)
-	0x09, 0x31,             //     USAGE (Y)
-	HID_RI_LOGICAL_MINIMUM(16, -2047),
-	HID_RI_LOGICAL_MAXIMUM(16, 2047),
-	0x75, 0x0C,             //     REPORT_SIZE (12)
-	0x95, 0x02,             //     REPORT_COUNT (2)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	HID_RI_LOGICAL_MINIMUM(8, 0),
-	HID_RI_LOGICAL_MAXIMUM(8, 1),
-	0x75, 0x01,             //     REPORT_SIZE (1)
-	0x95, 0x08,             //     REPORT_COUNT (8)
-	0x05, 0x09,             //     USAGE_PAGE (Button)
-	0x19, 0x01,             //     USAGE_MINIMUM (Button 1)
-	0x29, 0x08,             //     USAGE_MAXIMUM (Button 8)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	0xc0,                   //   END_COLLECTION
-	0xc0,                   // END_COLLECTION
+	JOYSTICK_DESCRIPTOR(ID_Joystick2)
 	#endif
-
 	#if (NUM_JOYSTICKS >= 3)
-	0x05, 0x01,             // USAGE_PAGE (Generic Desktop)
-	0x09, 0x05,             // USAGE (Gamepad)
-	0xa1, 0x01,             // COLLECTION (Application)
-	0x09, 0x01,             //   USAGE (Pointer)
-	0xa1, 0x00,             //   COLLECTION (Physical)
-	0x85, ID_Joystick3,     //     REPORT_ID (ID_Joystick3)
-	0x09, 0x30,             //     USAGE (X)
-	0x09, 0x31,             //     USAGE (Y)
-	HID_RI_LOGICAL_MINIMUM(16, -2047),
-	HID_RI_LOGICAL_MAXIMUM(16, 2047),
-	0x75, 0x0C,             //     REPORT_SIZE (12)
-	0x95, 0x02,             //     REPORT_COUNT (2)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	HID_RI_LOGICAL_MINIMUM(8, 0),
-	HID_RI_LOGICAL_MAXIMUM(8, 1),
-	0x75, 0x01,             //     REPORT_SIZE (1)
-	0x95, 0x08,             //     REPORT_COUNT (8)
-	0x05, 0x09,             //     USAGE_PAGE (Button)
-	0x19, 0x01,             //     USAGE_MINIMUM (Button 1)
-	0x29, 0x08,             //     USAGE_MAXIMUM (Button 8)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	0xc0,                   //   END_COLLECTION
-	0xc0,                   // END_COLLECTION
+	JOYSTICK_DESCRIPTOR(ID_Joystick3)
 	#endif
-
 	#if (NUM_JOYSTICKS >= 4)
-	0x05, 0x01,             // USAGE_PAGE (Generic Desktop)
-	0x09, 0x05,             // USAGE (Gamepad)
-	0xa1, 0x01,             // COLLECTION (Application)
-	0x09, 0x01,             //   USAGE (Pointer)
-	0xa1, 0x00,             //   COLLECTION (Physical)
-	0x85, ID_Joystick4,     //     REPORT_ID (ID_Joystick4)
-	0x09, 0x30,             //     USAGE (X)
-	0x09, 0x31,             //     USAGE (Y)
-	HID_RI_LOGICAL_MINIMUM(16, -2047),
-	HID_RI_LOGICAL_MAXIMUM(16, 2047),
-	0x75, 0x0C,             //     REPORT_SIZE (12)
-	0x95, 0x02,             //     REPORT_COUNT (2)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	HID_RI_LOGICAL_MINIMUM(8, 0),
-	HID_RI_LOGICAL_MAXIMUM(8, 1),
-	0x75, 0x01,             //     REPORT_SIZE (1)
-	0x95, 0x08,             //     REPORT_COUNT (8)
-	0x05, 0x09,             //     USAGE_PAGE (Button)
-	0x19, 0x01,             //     USAGE_MINIMUM (Button 1)
-	0x29, 0x08,             //     USAGE_MAXIMUM (Button 8)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	0xc0,                   //   END_COLLECTION
-	0xc0,                   // END_COLLECTION
-	#endif // NUM_JOYSTICKS >= 4
-
-	#if (USE_ACCELGYRO)
-	0x05, 0x01,             // USAGE_PAGE (Generic Desktop)
-	0x09, 0x05,             // USAGE (Gamepad)
-	0xa1, 0x01,             // COLLECTION (Application)
-	0x09, 0x01,             //   USAGE (Pointer)
-	0xa1, 0x00,             //   COLLECTION (Physical)
-	0x85, ID_AccelGyro,     //     REPORT_ID
-	0x09, 0x30,             //     USAGE (X)
-	0x09, 0x31,             //     USAGE (Y)
-	0x09, 0x32,             //     USAGE (Z)
-	0x09, 0x33,             //     USAGE (Rx)
-	0x09, 0x34,             //     USAGE (Ry)
-	0x09, 0x35,             //     USAGE (Rz)
-	HID_RI_LOGICAL_MINIMUM(8, -127),
-	HID_RI_LOGICAL_MAXIMUM(8, 127),
-	0x75, 0x08,             //     REPORT_SIZE (8)
-	0x95, 0x06,             //     REPORT_COUNT (6)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	HID_RI_LOGICAL_MINIMUM(8, 0),
-	HID_RI_LOGICAL_MAXIMUM(8, 1),
-	0x75, 0x01,             //     REPORT_SIZE (1)
-	0x95, 0x08,             //     REPORT_COUNT (8)
-	0x05, 0x09,             //     USAGE_PAGE (Button)
-	0x19, 0x01,             //     USAGE_MINIMUM (Button 1)
-	0x29, 0x08,             //     USAGE_MAXIMUM (Button 8)
-	0x81, 0x02,             //     INPUT (Data,Var,Abs)
-	0xc0,                   //   END_COLLECTION
-	0xc0,                   // END_COLLECTION
+	JOYSTICK_DESCRIPTOR(ID_Joystick4)
 	#endif
 
-	#if (USE_MOUSE != 0)
+	/* Maus: 3 Tasten, X/Y relativ → 4 Byte / mouse */
 	0x05, 0x01,             // USAGE_PAGE (Generic Desktop)
 	0x09, 0x02,             // USAGE (Mouse)
 	0xa1, 0x01,             // COLLECTION (Application)
@@ -349,16 +230,18 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM PanelReport[] =
 	0x81, 0x06,             //     INPUT (Data,Var,Rel)
 	0xc0,                   //   END_COLLECTION
 	0xc0,                   // END_COLLECTION
-	#endif
 };
 
 #endif
 
 
+/* ------------------------------------------------------------------ LED-Wiz-Schnittstelle */
+
 #if defined(ENABLE_LED_DEVICE)
 
 #define LED_REPORT_SIZE 8
 
+/* Output-Report 8 Byte (wie LED-Wiz), Input-Report 64 Byte für Antworten (proto.h) */
 static const USB_Descriptor_HIDReport_Datatype_t PROGMEM LEDReport[] =
 {
 	HID_RI_USAGE_PAGE(16, 0xFF00), /* Vendor Page 0 */
@@ -378,12 +261,9 @@ static const USB_Descriptor_HIDReport_Datatype_t PROGMEM LEDReport[] =
 
 #endif
 
-/** Device descriptor structure. This descriptor describes the overall
- *  device characteristics, including the supported USB version, control endpoint size and the
- *  number of device configurations. The descriptor is read out by the USB host when the enumeration
- *  process begins.
- */
- 
+
+/* ------------------------------------------------------------------ Gerätedeskriptor (RAM, PID wird gesetzt) */
+
 static USB_Descriptor_Device_t DeviceDescriptor =
 {
 	.Header                 = {.Size = sizeof(USB_Descriptor_Device_t), .Type = DTYPE_Device},
@@ -409,13 +289,17 @@ static char toHex(uint8_t x)
 	return x + 'A' - 10;
 }
 
+/* Windows merkt sich Deskriptoren je VID/PID/Version. Damit unterschiedliche Builds nicht
+ * mit einem alten Zwischenspeicher kollidieren, kodieren wir die Schnittstellen in der
+ * Versionsnummer und in der Seriennummer.
+ * Windows caches descriptors per VID/PID/release. To keep different builds from colliding
+ * with a stale cache, the interfaces are encoded in the release number and serial string. */
 typedef enum {
-	config_mask_joysticks  = 3 << 0,
-	config_flag_keyboard   = 1 << 2,
-	config_flag_mouse      = 1 << 3,
-	config_flag_consumer   = 1 << 4,
-	config_mask_panel      = config_mask_joysticks | config_flag_keyboard | config_flag_mouse | config_flag_consumer,
-	config_flag_led        = 1 << 5,
+	config_mask_joysticks  = 7 << 0,
+	config_flag_keyboard   = 1 << 3,
+	config_flag_mouse      = 1 << 4,
+	config_flag_consumer   = 1 << 5,
+	config_flag_led        = 1 << 6,
 } usb_config_flags;
 
 static struct {
@@ -423,27 +307,24 @@ static struct {
 	uint16_t UnicodeString[15];
 } SerialNumberString = {
 	.Header = {
-		.Size = USB_STRING_LEN(15), 
+		.Size = USB_STRING_LEN(15),
 		.Type = DTYPE_String
-	} 
+	}
 };
 
 void SetProductID(uint16_t id)
 {
 	uint8_t const ledwiz_id_minus1 = id & 0xFF;
-	uint16_t const flags = 
+	uint16_t const flags =
 		#if defined(ENABLE_PANEL_DEVICE)
-		(config_mask_joysticks & NUM_JOYSTICKS) |
-		(USE_KEYBOARD != 0 ? config_flag_keyboard : 0) |
-		(USE_MOUSE != 0 ? config_flag_mouse : 0) |
-		(USE_CONSUMER != 0 ? config_flag_consumer : 0) |
+		(config_mask_joysticks & NUM_JOYSTICKS) | config_flag_keyboard | config_flag_mouse | config_flag_consumer |
 		#endif
 		#if defined(ENABLE_LED_DEVICE)
 		config_flag_led |
 		#endif
 		0;
 	uint8_t const ver = LWCLONEU2_VERSION;
-	uint16_t const rel = ((uint16_t)(ver & 0x1F)  << 8) | flags; // up to 13 bits (maximum is 9999)
+	uint16_t const rel = ((uint16_t)(ver & 0x1F) << 8) | flags; // maximal 13 Bit (BCD-Grenze 9999)
 
 	DeviceDescriptor.ProductID = id;
 	DeviceDescriptor.ReleaseNumber = NUMBER_TO_BCD(rel);
@@ -453,8 +334,8 @@ void SetProductID(uint16_t id)
 	c[1]  = 'W';
 	c[2]  = 'C';
 	c[3]  = '-';
-	c[4]  = '0' + (((ver >>  8) & 0xFF) / 10);
-	c[5]  = '0' + (((ver >>  8) & 0xFF) % 10);
+	c[4]  = '0';
+	c[5]  = '0';
 	c[6]  = '0' + ((ver >>  4) & 0x0F);
 	c[7]  = '0' + ((ver >>  0) & 0x0F);
 	c[8]  = '-';
@@ -466,23 +347,20 @@ void SetProductID(uint16_t id)
 	c[14] = toHex((flags >> 0) & 0x0F);
 }
 
-/** Configuration descriptor structure. This descriptor, located in FLASH memory, describes the usage
- *  of the device in one of its supported configurations, including information about any device interfaces
- *  and endpoints. The descriptor is read out by the USB host during the enumeration process when selecting
- *  a configuration so that the host may correctly communicate with the USB device.
- */
+
+/* ------------------------------------------------------------------ Konfigurationsdeskriptor */
 
 typedef enum {
 	IFACENUMBER_MISC,
 	#if defined(ENABLE_PANEL_DEVICE)
 	IFACENUMBER_PANEL,
 	#endif
-	#if defined(ENABLE_LED_DEVICE) 
+	#if defined(ENABLE_LED_DEVICE)
 	IFACENUMBER_LED,
 	#endif
 	NUM_TOTAL_INTERFACES,
 } iface_numbers;
- 
+
 static const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor =
 {
 	.Config =
@@ -515,7 +393,7 @@ static const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor =
 		.CountryCode            = 0x00,
 		.TotalReportDescriptors = 1,
 		.HIDReportType          = HID_DTYPE_Report,
-		.HIDReportLength        = sizeof(LEDReport)
+		.HIDReportLength        = sizeof(MiscReport)
 	},
 
 	.HID_MiscReportINEndpoint =
@@ -594,13 +472,9 @@ static const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor =
 	#endif
 };
 
-/** This function is called by the library when in device mode, and must be overridden (see library "USB Descriptors"
- *  documentation) by the application code so that the address and size of a requested descriptor can be given
- *  to the USB library. When the device receives a Get Descriptor request on the control endpoint, this function
- *  is called so that the descriptor details can be passed back and the appropriate descriptor sent back to the
- *  USB host.
- */
- 
+
+/* ------------------------------------------------------------------ Deskriptor-Abfrage */
+
 uint16_t CALLBACK_USB_GetDescriptor(
 	const uint16_t wValue,
 	const uint8_t wIndex,
@@ -640,7 +514,7 @@ uint16_t CALLBACK_USB_GetDescriptor(
 					break;
 
 				case SerialNumberString_id:
-					*DescriptorMemorySpace = MEMSPACE_RAM;
+					*pmemspace = MEMSPACE_RAM;
 					Address = &SerialNumberString;
 					Size = SerialNumberString.Header.Size;
 					break;
@@ -671,7 +545,7 @@ uint16_t CALLBACK_USB_GetDescriptor(
 			}
 			#endif
 			#if defined(ENABLE_PANEL_DEVICE)
-			if (wIndex == IFACENUMBER_PANEL) 
+			if (wIndex == IFACENUMBER_PANEL)
 			{
 				Address = &ConfigurationDescriptor.HID_PanelHID;
 				Size    = sizeof(USB_HID_Descriptor_HID_t);
@@ -696,18 +570,17 @@ uint16_t CALLBACK_USB_GetDescriptor(
 			}
 			#endif
 			#if defined(ENABLE_PANEL_DEVICE)
-			if (wIndex == IFACENUMBER_PANEL) 
+			if (wIndex == IFACENUMBER_PANEL)
 			{
 				Address = &PanelReport;
 				Size    = sizeof(PanelReport);
 				break;
 			}
 			#endif
-		break;
+			break;
 	}
 
 	*DescriptorAddress = Address;
 
 	return Size;
 }
-

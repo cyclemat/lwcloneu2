@@ -1,6 +1,7 @@
 /*
  * LWCloneU2
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,9 +10,6 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 /*
@@ -65,20 +63,16 @@
 
 #if defined(ENABLE_LED_DEVICE)
 #define USB_VENDOR_ID      0xFAFA
-#define USB_PRODUCT_ID     0x00F3   // this is used as the device identifier, 0x00F0 is '1' up to 0x00FF is '16'
+#define USB_PRODUCT_ID     0x00F3   // Gerätekennung: 0x00F0 = '1' bis 0x00FF = '16' / device id
 #else
 #define USB_VENDOR_ID      0x03EB   // Atmel
 #define USB_PRODUCT_ID     0x0147
 #endif
 
-#define LWCLONEU2_VERSION   1
+#define LWCLONEU2_VERSION   2
 
 
-/* Type Defines: */
-/** Type define for the device configuration descriptor structure. This must be defined in the
- *  application code, as the configuration descriptor contains several sub-descriptors which
- *  vary between devices, and which describe the device's usage to the host.
- */
+/* Konfigurationsdeskriptor: Misc (immer), Panel, LED / configuration descriptor */
 typedef struct
 {
 	USB_Descriptor_Configuration_Header_t  Config;
@@ -97,13 +91,11 @@ typedef struct
 	#endif
 } USB_Descriptor_Configuration_t;
 
-/* Macros: */
-/** Endpoint address of the Panel HID reporting IN endpoint. */
+/* Endpunkte / endpoints */
 #define MISC_EPADDR            (ENDPOINT_DIR_IN | 1)
 #define PANEL_EPADDR           (ENDPOINT_DIR_IN | 2)
 #define LED_EPADDR             (ENDPOINT_DIR_IN | 3)
 
-/** Size in bytes of the Panel HID reporting IN endpoint. */
 #define MISC_EPSIZE            64
 #define PANEL_EPSIZE            8
 #define LED_EPSIZE             64
@@ -112,13 +104,10 @@ typedef struct
 #define PANEL_INTERVAL_MS   2
 #define LED_INTERVAL_MS    10
 
-/** Descriptor header type value, to indicate a HID class HID descriptor. */
+/* HID-Deskriptortypen / HID descriptor types */
 #define DTYPE_HID                 0x21
-
-/** Descriptor header type value, to indicate a HID class HID report descriptor. */
 #define DTYPE_Report              0x22
 
-/* Function Prototypes: */
 uint16_t CALLBACK_USB_GetDescriptor(
 	const uint16_t wValue,
 	const uint8_t wIndex,
@@ -127,6 +116,5 @@ uint16_t CALLBACK_USB_GetDescriptor(
 	ATTR_WARN_UNUSED_RESULT ATTR_NON_NULL_PTR_ARG(3);
 
 void SetProductID(uint16_t id);
-
 
 #endif

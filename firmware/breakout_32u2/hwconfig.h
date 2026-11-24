@@ -1,6 +1,8 @@
 /*
- * LWCloneU2
+ * LWCloneU2 – Breakout-Board ATmega32U2 (8 oder 16 MHz)
+ *
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,9 +11,6 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #ifndef HWCONFIG_H__INCLUDED
@@ -21,17 +20,19 @@
 #error "invalid CPU clock frequency ==> should be 8 MHZ or 16 MHZ"
 #endif
 
-#if !defined(__AVR_ATmega32U2__) 
+#if !defined(__AVR_ATmega32U2__)
 #error "invalid CPU type ==> should be ATMega32u2"
 #endif
 
+#include <stdint.h>
 #include <avr/io.h>
+
 #include "devconfig.h"
 #include "pinmap.h"
 
 
 /****************************************
- LED driver config
+ LED driver config (Timer 0, 200 µs)
 ****************************************/
 
 #if defined(ENABLE_LED_DEVICE)
@@ -61,7 +62,7 @@ static void inline led_timer_init(void)
 
 
 /****************************************
- Clock config
+ Clock config (Timer 1, 1 ms)
 ****************************************/
 
 #define CLOCK_COMPARE_MATCH_vect TIMER1_COMPA_vect
@@ -102,9 +103,11 @@ static void inline debug_uart_init(void)
 #endif
 
 
+/****************************************
+ Bootloader (DFU, 4 KB)
+****************************************/
+
 #define BOOTLOADER_SIZE 4096
 #define BOOTLOADER_START_ADDR  ((uint8_t*)1 + FLASHEND - BOOTLOADER_SIZE)
-
-
 
 #endif

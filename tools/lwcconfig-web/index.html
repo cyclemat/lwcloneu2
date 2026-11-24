@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LWCloneU2 Konfiguration</title>
+<meta name="description" content="Pin-Belegung, Joystick-Achsen und WS2812-Strip eines LWCloneU2 per USB einstellen (WebHID, Edge/Chrome). Configure an LWCloneU2 via USB.">
+<style>
+:root {
+  --bg: #E3E6EA; --bg2: #F5F6F8; --card: #FFFFFF; --text: #161A20; --muted: #58626E; --line: #D0D5DB;
+  --accent: #F3A43B; --accent-text: #1E1206; --blue: #3C8DFF; --red: #FF6A5C; --green: #5BD38A;
+  --input: #FFFFFF; --hover: #EEF1F4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1013; --bg2: #16191E; --card: #1D2127; --text: #E6EAEE; --muted: #9AA4AF; --line: #2B3138;
+    --input: #16191E; --hover: #242932;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1013; --bg2: #16191E; --card: #1D2127; --text: #E6EAEE; --muted: #9AA4AF; --line: #2B3138;
+  --input: #16191E; --hover: #242932;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14.5px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 0 16px 90px;
+}
+header { max-width: 1100px; margin: 0 auto; padding: 18px 0 8px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+header h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: .2px; flex: 1 1 auto; }
+header h1 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+main { max-width: 1100px; margin: 0 auto; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin: 12px 0; }
+.card h2 { font-size: 15px; margin: 0 0 10px; font-weight: 650; }
+.hint { color: var(--muted); font-size: 12.5px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.grow { flex: 1 1 auto; }
+button, .btn {
+  font: inherit; border: 1px solid var(--line); background: var(--bg2); color: var(--text);
+  border-radius: 999px; padding: 7px 14px; cursor: pointer; min-height: 36px;
+}
+button:hover { background: var(--hover); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+button.primary:hover { filter: brightness(1.05); }
+button.danger { color: var(--red); border-color: var(--red); background: transparent; }
+button.small { padding: 4px 10px; min-height: 28px; font-size: 12.5px; }
+select, input[type=number], input[type=text] {
+  font: inherit; background: var(--input); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 6px 8px; min-height: 34px; max-width: 100%;
+}
+select:focus, input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+input[type=number] { width: 78px; }
+input[type=range] { accent-color: var(--accent); width: 120px; vertical-align: middle; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.tabs button { border-radius: 999px; }
+.tabs button.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+.tab { display: none; }
+.tab.active { display: block; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+tr:last-child td { border-bottom: none; }
+td.num { color: var(--muted); width: 34px; }
+.tablewrap { overflow-x: auto; }
+.toggle { position: relative; display: inline-block; width: 40px; height: 22px; vertical-align: middle; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle span { position: absolute; inset: 0; background: var(--line); border-radius: 999px; transition: .15s; }
+.toggle span::before { content: ""; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .15s; }
+.toggle input:checked + span { background: var(--accent); }
+.toggle input:checked + span::before { transform: translateX(18px); }
+.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--line); vertical-align: middle; }
+.dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.bar { position: relative; height: 10px; background: var(--line); border-radius: 999px; width: 160px; display: inline-block; vertical-align: middle; overflow: hidden; }
+.bar i { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--blue); }
+.bar b { position: absolute; top: 0; bottom: 0; left: 0; background: var(--accent); }
+.bar u { position: absolute; top: 0; bottom: 0; background: rgba(255,106,92,.35); }
+.conflict { outline: 2px solid var(--red); border-radius: 10px; }
+.status { color: var(--muted); font-size: 13px; }
+.status.err { color: var(--red); }
+.status.ok { color: var(--green); }
+.footer {
+  position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+  padding: 10px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center;
+}
+.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--bg2); border: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.unsupported { border-color: var(--red); }
+dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 18px; max-width: 520px; }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+textarea { width: 100%; min-height: 160px; font: 12px/1.4 ui-monospace, Consolas, monospace; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13.5px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+@media (max-width: 640px) {
+  th:nth-child(1), td.num { display: none; }
+  .bar { width: 110px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LWCloneU2 <small data-i18n="subtitle">Konfiguration</small></h1>
+  <span id="devbadge" class="badge" data-i18n="notconnected">nicht verbunden</span>
+  <button id="langbtn" class="small" title="Sprache / language">EN</button>
+  <button id="connectbtn" class="primary" data-i18n="connect">Verbinden</button>
+</header>
+
+<main>
+  <div id="unsupported" class="card unsupported" style="display:none">
+    <strong data-i18n="nowebhid">Dieser Browser unterstützt WebHID nicht.</strong>
+    <div class="hint" data-i18n="nowebhid2">Bitte Microsoft Edge oder Google Chrome (ab Version 89) verwenden. Die Datei kann lokal geöffnet werden.</div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="kv grow">
+        <span data-i18n="board">Board</span><span id="i_board">–</span>
+        <span data-i18n="firmware">Firmware</span><span id="i_fw">–</span>
+        <span data-i18n="ledwizid">LED-Wiz-ID</span><span id="i_id">–</span>
+        <span data-i18n="pins">Pins</span><span id="i_pins">–</span>
+      </div>
+      <div class="hint" style="max-width:420px" data-i18n="intro">
+        Das Tool spricht über dieselbe USB-HID-Verbindung wie die LED-Wiz-Software. Änderungen werden mit
+        „Anwenden“ sofort wirksam, aber erst mit „Speichern“ dauerhaft im EEPROM abgelegt.
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="outputs" class="active" data-i18n="tab_outputs">Ausgänge</button>
+    <button data-tab="inputs" data-i18n="tab_inputs">Eingänge</button>
+    <button data-tab="axes" data-i18n="tab_axes">Achsen</button>
+    <button data-tab="device" data-i18n="tab_device">Gerät</button>
+  </div>
+
+  <!-- Ausgänge -->
+  <section id="tab-outputs" class="tab active">
+    <div class="card">
+      <h2 data-i18n="strip">WS2811 / WS2812-Strip</h2>
+      <div class="row">
+        <label><span data-i18n="datapin">Daten-Pin</span><br><select id="ws_pin"></select></label>
+        <label><span data-i18n="pixels">Pixel</span><br><input type="number" id="ws_count" min="0" max="255" value="0"></label>
+        <label><span data-i18n="order">Farbreihenfolge</span><br>
+          <select id="ws_order"><option value="0">GRB (WS2812)</option><option value="1">RGB (WS2811)</option><option value="2">BRG</option></select></label>
+        <div class="hint grow" data-i18n="striphint">Jeder LED-Wiz-Ausgang kann einen Farbkanal eines Pixelbereichs steuern. Während der Strip beschrieben wird, sind Interrupts kurz gesperrt (~30 µs je Pixel) – lange Strips lassen GPIO-PWM leicht flackern.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row" style="margin-bottom:8px">
+        <h2 class="grow" style="margin:0" data-i18n="outputs">Ausgänge 1–32 (LED-Wiz)</h2>
+        <button class="small" id="testall" data-i18n="testall">Alle an</button>
+        <button class="small" id="testoff" data-i18n="testoff">Alle aus</button>
+      </div>
+      <div class="tablewrap"><table id="t_out">
+        <thead><tr><th>#</th><th data-i18n="type">Typ</th><th data-i18n="pin">Pin</th><th data-i18n="inverted">Invertiert</th>
+          <th data-i18n="firstpixel">Pixel ab</th><th data-i18n="count">Anzahl</th><th data-i18n="channel">Kanal</th><th data-i18n="test">Test</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Eingänge -->
+  <section id="tab-inputs" class="tab">
+    <div class="card">
+      <h2 data-i18n="inputs">Eingänge (Taster, Joystick-Richtungen, Encoder)</h2>
+      <div class="hint" data-i18n="inputhint">Taster schalten standardmäßig gegen GND (interner Pull-up). „Shift“ aktiviert für alle anderen Eingänge die zweite Funktion. Der Punkt zeigt den Live-Zustand.</div>
+      <div class="tablewrap"><table id="t_in">
+        <thead><tr><th>#</th><th data-i18n="pin">Pin</th><th data-i18n="function">Funktion</th><th data-i18n="shiftfunction">Mit Shift</th><th data-i18n="activehigh">Aktiv high</th><th data-i18n="live">Live</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Achsen -->
+  <section id="tab-axes" class="tab">
+    <div class="card">
+      <h2 data-i18n="axes">Analoge Joystick-Achsen</h2>
+      <div class="hint" data-i18n="axeshint">Potis/Hall-Sensoren an ADC-fähigen Pins. Min/Mitte/Max mit den Knöpfen aus dem Live-Wert übernehmen. Die Totzone (0–100 %) um die Mitte gibt 0 aus, außerhalb wird wieder auf den vollen Bereich skaliert.</div>
+      <div class="tablewrap"><table id="t_ax">
+        <thead><tr><th>#</th><th data-i18n="pin">Pin</th><th>Joystick</th><th data-i18n="axis">Achse</th><th data-i18n="inverted">Invertiert</th>
+          <th>Min</th><th data-i18n="center">Mitte</th><th>Max</th><th data-i18n="deadzone">Totzone</th><th data-i18n="live">Live</th><th data-i18n="output">Ausgabe</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Gerät -->
+  <section id="tab-device" class="tab">
+    <div class="card">
+      <h2 data-i18n="ledwizid">LED-Wiz-ID</h2>
+      <div class="row">
+        <select id="newid"></select>
+        <button id="setid" data-i18n="setid">ID setzen (Gerät startet neu)</button>
+        <div class="hint grow" data-i18n="idhint">Die ID (1–16) bestimmt, als welches LED-Wiz-Gerät sich der Klon meldet. Nach dem Neustart neu verbinden.</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="backup">Sicherung</h2>
+      <div class="row">
+        <button id="exportbtn" data-i18n="export">Als JSON exportieren</button>
+        <button id="importbtn" data-i18n="import">JSON importieren</button>
+        <input type="file" id="importfile" accept="application/json,.json" style="display:none">
+        <div class="hint grow" data-i18n="backuphint">Die Datei enthält die komplette Pin-Belegung dieses Boards.</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="maintenance">Wartung</h2>
+      <div class="row">
+        <button id="defaultsbtn" class="danger" data-i18n="defaults">Werkseinstellungen laden</button>
+        <button id="dfubtn" class="danger" data-i18n="dfu">Bootloader starten</button>
+        <div class="hint grow" data-i18n="mainthint">Werkseinstellungen werden erst mit „Speichern“ dauerhaft. Der Bootloader dient zum Flashen neuer Firmware (Leonardo/Micro: avrdude, Breakout: Atmel FLIP/dfu-programmer).</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="about">Über</h2>
+      <div class="hint">LWCloneU2 – GPLv2 – <a href="https://github.com/cyclemat/lwcloneu2" style="color:var(--blue)">github.com/cyclemat/lwcloneu2</a>.
+        <span data-i18n="abouttext">Protokoll: proto.h, Layout: config.h der Firmware.</span></div>
+    </div>
+  </section>
+</main>
+
+<div class="footer">
+  <button id="loadbtn" data-i18n="load">Vom Gerät laden</button>
+  <button id="applybtn" data-i18n="apply">Anwenden (sofort)</button>
+  <button id="savebtn" class="primary" data-i18n="save">Speichern (EEPROM)</button>
+  <span id="status" class="status"></span>
+</div>
+
+<dialog id="dlg">
+  <h2 id="dlg_title" style="margin-top:0;font-size:16px"></h2>
+  <div id="dlg_body"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:14px">
+    <button id="dlg_cancel" data-i18n="cancel">Abbrechen</button>
+    <button id="dlg_ok" class="primary">OK</button>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+
+/* ------------------------------------------------------------------ Sprache / language */
+const I18N = {
+  de: {
+    subtitle:'Konfiguration', notconnected:'nicht verbunden', connected:'verbunden', connect:'Verbinden', disconnect:'Trennen',
+    nowebhid:'Dieser Browser unterstützt WebHID nicht.', nowebhid2:'Bitte Microsoft Edge oder Google Chrome (ab Version 89) verwenden. Die Datei kann lokal geöffnet werden.',
+    board:'Board', firmware:'Firmware', ledwizid:'LED-Wiz-ID', pins:'Pins',
+    intro:'Das Tool spricht über dieselbe USB-HID-Verbindung wie die LED-Wiz-Software. Änderungen werden mit „Anwenden“ sofort wirksam, aber erst mit „Speichern“ dauerhaft im EEPROM abgelegt.',
+    tab_outputs:'Ausgänge', tab_inputs:'Eingänge', tab_axes:'Achsen', tab_device:'Gerät',
+    strip:'WS2811 / WS2812-Strip', datapin:'Daten-Pin', pixels:'Pixel', order:'Farbreihenfolge',
+    striphint:'Jeder LED-Wiz-Ausgang kann einen Farbkanal eines Pixelbereichs steuern. Während der Strip beschrieben wird, sind Interrupts kurz gesperrt (~30 µs je Pixel) – lange Strips lassen GPIO-PWM leicht flackern.',
+    outputs:'Ausgänge 1–32 (LED-Wiz)', testall:'Alle an', testoff:'Alle aus', type:'Typ', pin:'Pin', inverted:'Invertiert',
+    firstpixel:'Pixel ab', count:'Anzahl', channel:'Kanal', test:'Test',
+    inputs:'Eingänge (Taster, Joystick-Richtungen, Encoder)',
+    inputhint:'Taster schalten standardmäßig gegen GND (interner Pull-up). „Shift“ aktiviert für alle anderen Eingänge die zweite Funktion. Der Punkt zeigt den Live-Zustand.',
+    function:'Funktion', shiftfunction:'Mit Shift', activehigh:'Aktiv high', live:'Live',
+    axes:'Analoge Joystick-Achsen',
+    axeshint:'Potis/Hall-Sensoren an ADC-fähigen Pins. Min/Mitte/Max mit den Knöpfen aus dem Live-Wert übernehmen. Die Totzone (0–100 %) um die Mitte gibt 0 aus, außerhalb wird wieder auf den vollen Bereich skaliert.',
+    axis:'Achse', center:'Mitte', deadzone:'Totzone', output:'Ausgabe',
+    setid:'ID setzen (Gerät startet neu)', idhint:'Die ID (1–16) bestimmt, als welches LED-Wiz-Gerät sich der Klon meldet. Nach dem Neustart neu verbinden.',
+    backup:'Sicherung', export:'Als JSON exportieren', import:'JSON importieren', backuphint:'Die Datei enthält die komplette Pin-Belegung dieses Boards.',
+    maintenance:'Wartung', defaults:'Werkseinstellungen laden', dfu:'Bootloader starten',
+    mainthint:'Werkseinstellungen werden erst mit „Speichern“ dauerhaft. Der Bootloader dient zum Flashen neuer Firmware (Leonardo/Micro: avrdude, Breakout: Atmel FLIP/dfu-programmer).',
+    about:'Über', abouttext:'Protokoll: proto.h, Layout: config.h der Firmware.',
+    load:'Vom Gerät laden', apply:'Anwenden (sofort)', save:'Speichern (EEPROM)', cancel:'Abbrechen',
+    none:'– keine –', reserved:'reserviert', gpio:'GPIO (PWM)', ws2812:'WS2812-Kanal', red:'Rot', green:'Grün', blue:'Blau', white:'Weiß',
+    set:'übernehmen', conflict:'Pin mehrfach belegt', rangeerr:'Pixelbereich außerhalb des Strips',
+    st_reading:'Konfiguration wird gelesen …', st_writing:'Konfiguration wird übertragen …', st_applied:'Angewendet (nicht gespeichert).',
+    st_saved:'Im EEPROM gespeichert.', st_loaded:'Konfiguration vom Gerät geladen.', st_invalid:'Gerät hat die Konfiguration abgelehnt (ungültig).',
+    st_timeout:'Keine Antwort vom Gerät.', st_nodev:'Kein LWCloneU2 mit Konfigurationsprotokoll gefunden. Firmware v2 nötig.',
+    st_defaults:'Werkseinstellungen geladen (nicht gespeichert).', st_fixfirst:'Bitte zuerst die rot markierten Konflikte beheben.',
+    confirm_defaults:'Werkseinstellungen laden?', confirm_defaults2:'Die aktuelle Belegung im Gerät wird durch die Standardbelegung des Boards ersetzt (erst mit „Speichern“ dauerhaft).',
+    confirm_dfu:'Bootloader starten?', confirm_dfu2:'Das Gerät trennt sich vom USB und wartet auf eine neue Firmware. Zum normalen Betrieb zurück: Reset oder neu einstecken.',
+    confirm_id:'LED-Wiz-ID ändern?', confirm_id2:'Das Gerät startet neu und meldet sich mit der neuen ID. Danach „Verbinden“ erneut drücken.',
+    importerr:'Datei passt nicht zu diesem Board oder ist beschädigt.', joystick:'Joystick', key:'Taste', mod:'Modifier', consumer:'Medien', mouse:'Maus', special:'Sonder',
+    shift:'Shift (zweite Belegung)', mxclk:'Maus X Takt', mxdir:'Maus X Richtung', myclk:'Maus Y Takt', mydir:'Maus Y Richtung',
+    left:'Links', right:'Rechts', up:'Hoch', down:'Runter', button:'Taste',
+  },
+  en: {
+    subtitle:'Configuration', notconnected:'not connected', connected:'connected', connect:'Connect', disconnect:'Disconnect',
+    nowebhid:'This browser does not support WebHID.', nowebhid2:'Please use Microsoft Edge or Google Chrome (89+). The file can be opened locally.',
+    board:'Board', firmware:'Firmware', ledwizid:'LED-Wiz id', pins:'Pins',
+    intro:'The tool talks over the same USB HID connection the LED-Wiz software uses. “Apply” takes effect immediately, “Save” stores the configuration permanently in EEPROM.',
+    tab_outputs:'Outputs', tab_inputs:'Inputs', tab_axes:'Axes', tab_device:'Device',
+    strip:'WS2811 / WS2812 strip', datapin:'Data pin', pixels:'Pixels', order:'Color order',
+    striphint:'Each LED-Wiz output can drive one color channel of a pixel range. While the strip is written interrupts are blocked briefly (~30 µs per pixel) – long strips make GPIO PWM flicker slightly.',
+    outputs:'Outputs 1–32 (LED-Wiz)', testall:'All on', testoff:'All off', type:'Type', pin:'Pin', inverted:'Inverted',
+    firstpixel:'First pixel', count:'Count', channel:'Channel', test:'Test',
+    inputs:'Inputs (buttons, joystick directions, encoders)',
+    inputhint:'Switches connect to GND by default (internal pull-up). “Shift” activates the second function of all other inputs. The dot shows the live state.',
+    function:'Function', shiftfunction:'With shift', activehigh:'Active high', live:'Live',
+    axes:'Analog joystick axes',
+    axeshint:'Pots/Hall sensors on ADC capable pins. Take min/center/max from the live value with the buttons. The dead zone (0–100 %) around the center outputs 0; outside it the value is rescaled to the full range.',
+    axis:'Axis', center:'Center', deadzone:'Dead zone', output:'Output',
+    setid:'Set id (device restarts)', idhint:'The id (1–16) selects which LED-Wiz device the clone appears as. Reconnect after the restart.',
+    backup:'Backup', export:'Export as JSON', import:'Import JSON', backuphint:'The file contains the complete pin assignment of this board.',
+    maintenance:'Maintenance', defaults:'Load factory defaults', dfu:'Start bootloader',
+    mainthint:'Defaults become permanent only with “Save”. The bootloader is used to flash new firmware (Leonardo/Micro: avrdude, breakout: Atmel FLIP/dfu-programmer).',
+    about:'About', abouttext:'Protocol: proto.h, layout: config.h of the firmware.',
+    load:'Load from device', apply:'Apply (now)', save:'Save (EEPROM)', cancel:'Cancel',
+    none:'– none –', reserved:'reserved', gpio:'GPIO (PWM)', ws2812:'WS2812 channel', red:'Red', green:'Green', blue:'Blue', white:'White',
+    set:'set', conflict:'Pin used more than once', rangeerr:'Pixel range outside the strip',
+    st_reading:'Reading configuration …', st_writing:'Transferring configuration …', st_applied:'Applied (not saved).',
+    st_saved:'Saved to EEPROM.', st_loaded:'Configuration loaded from device.', st_invalid:'Device rejected the configuration (invalid).',
+    st_timeout:'No reply from device.', st_nodev:'No LWCloneU2 with configuration protocol found. Firmware v2 required.',
+    st_defaults:'Factory defaults loaded (not saved).', st_fixfirst:'Please fix the conflicts marked in red first.',
+    confirm_defaults:'Load factory defaults?', confirm_defaults2:'The current assignment in the device is replaced by the board defaults (permanent only after “Save”).',
+    confirm_dfu:'Start bootloader?', confirm_dfu2:'The device detaches from USB and waits for new firmware. Back to normal: reset or replug.',
+    confirm_id:'Change LED-Wiz id?', confirm_id2:'The device restarts with the new id. Press “Connect” again afterwards.',
+    importerr:'File does not match this board or is damaged.', joystick:'Joystick', key:'Key', mod:'Modifier', consumer:'Media', mouse:'Mouse', special:'Special',
+    shift:'Shift (second mapping)', mxclk:'Mouse X clock', mxdir:'Mouse X direction', myclk:'Mouse Y clock', mydir:'Mouse Y direction',
+    left:'Left', right:'Right', up:'Up', down:'Down', button:'Button',
+  }
+};
+let lang = 'de';
+try { lang = (localStorage.getItem('lwc_lang') || (navigator.language || 'de').slice(0,2)) === 'en' ? 'en' : 'de'; } catch (e) {}
+const t = k => (I18N[lang][k] ?? I18N.de[k] ?? k);
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.getElementById('langbtn').textContent = lang === 'de' ? 'EN' : 'DE';
+  document.title = 'LWCloneU2 ' + t('subtitle');
+  renderAll();
+}
+document.getElementById('langbtn').onclick = () => { lang = lang === 'de' ? 'en' : 'de'; try { localStorage.setItem('lwc_lang', lang); } catch (e) {} applyLang(); };
+
+/* ------------------------------------------------------------------ Protokoll / protocol (proto.h) */
+const CMD = { SBA:64, SETID:65, DFU:66, INFO:0xA0, READ:0xA1, WRITE:0xA2, APPLY:0xA3, SAVE:0xA4, DEFAULTS:0xA5, LIVE:0xA6, PININFO:0xA7 };
+const PIN_NONE = 0xFF;
+const OUT = { NONE:0, GPIO:1, WS2812:2 };
+
+/* ------------------------------------------------------------------ Boards / pin names (pinmap.h) */
+const D = n => 'D' + n, A = n => 'A' + n;
+const NAMES_32U4 = [...Array(14).keys()].map(D).concat(['D14 MISO','D15 SCK','D16 MOSI','D17 RXLED'], [0,1,2,3,4,5].map(A), ['TXLED']);
+const BOARDS = {
+  1: { name:'Arduino Leonardo', names: NAMES_32U4 },
+  2: { name:'Pro Micro / Arduino Micro', names: NAMES_32U4, hidden: [11,12,13,22,23] },
+  3: { name:'Arduino Mega 2560', names: [...Array(54).keys()].map(D).concat([...Array(16).keys()].map(A)) },
+  4: { name:'Arduino Uno', names: [...Array(14).keys()].map(D).concat([0,1,2,3,4,5].map(A)) },
+  5: { name:'Breakout ATmega32U2', names: ['PB0','PB1','PB2','PB3','PB4','PB5','PB6','PB7','PC2','PC4','PC5','PC6','PC7','PD0','PD1','PD2','PD3','PD4','PD5','PD6','PD7'] },
+};
+
+/* ------------------------------------------------------------------ Funktionscodes / function codes (keydefs.h) */
+const KEYNAMES = {};
+'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((c,i) => KEYNAMES[4+i] = c);
+'1234567890'.split('').forEach((c,i) => KEYNAMES[0x1E+i] = c);
+Object.assign(KEYNAMES, {0x28:'Enter',0x29:'Esc',0x2A:'Backspace',0x2B:'Tab',0x2C:'Space',0x2D:'-',0x2E:'=',0x2F:'[',0x30:']',0x31:'\\',0x32:'# ~',0x33:';',0x34:"'",0x35:'`',0x36:',',0x37:'.',0x38:'/',0x39:'CapsLock',
+  0x46:'PrintScreen',0x47:'ScrollLock',0x48:'Pause',0x49:'Insert',0x4A:'Home',0x4B:'PageUp',0x4C:'Delete',0x4D:'End',0x4E:'PageDown',0x4F:'→ Right',0x50:'← Left',0x51:'↓ Down',0x52:'↑ Up',0x53:'NumLock',
+  0x54:'KP /',0x55:'KP *',0x56:'KP -',0x57:'KP +',0x58:'KP Enter',0x62:'KP 0',0x63:'KP ,',0x64:'Non-US \\',0x65:'Application'});
+for (let i=0;i<12;i++) KEYNAMES[0x3A+i] = 'F'+(i+1);
+for (let i=1;i<=9;i++) KEYNAMES[0x58+i] = 'KP '+i;
+const MODNAMES = ['LeftCtrl','LeftShift','LeftAlt','LeftGUI','RightCtrl','RightShift','RightAlt','RightGUI'];
+function funcGroups() {
+  const g = [];
+  const keys = Object.keys(KEYNAMES).map(Number).sort((a,b)=>a-b).map(c => [c, KEYNAMES[c]]);
+  g.push([t('key'), keys.concat([[0x70,'Alt+F4'],[0x71,'Shift+F7']])]);
+  g.push([t('mod'), MODNAMES.map((n,i)=>[0x80+i,n])]);
+  g.push([t('consumer'), [[0x90,'Volume +'],[0x91,'Volume −'],[0x92,'Mute']]]);
+  g.push([t('mouse'), [[0x98,t('mouse')+' '+t('left')],[0x99,t('mouse')+' '+t('right')],[0x9A,t('mouse')+' Mitte/Middle']]]);
+  for (let j=0;j<4;j++) {
+    const base = 0xA0 + j*12, J = `${t('joystick')} ${j+1} `;
+    const items = [[base,J+t('left')],[base+1,J+t('right')],[base+2,J+t('up')],[base+3,J+t('down')]];
+    for (let b=0;b<8;b++) items.push([base+4+b, J+t('button')+' '+(b+1)]);
+    g.push([`${t('joystick')} ${j+1}`, items]);
+  }
+  g.push([t('special'), [[0xF0,t('shift')],[0xF1,t('mxclk')],[0xF2,t('mxdir')],[0xF3,t('myclk')],[0xF4,t('mydir')]]]);
+  return g;
+}
+
+/* ------------------------------------------------------------------ Zustand / state */
+let device = null;           // HIDDevice
+let info = null;             // {proto, board, fwMajor, fwMinor, size, numPins}
+let pinInfo = [];            // [{port, bit, adc, reserved}]
+let cfg = null;              // parsed config
+let live = { axes: new Array(8).fill(0), inputs: 0 };
+let liveTimer = null;
+let busy = false;
+let ledwizId = null;
+
+function setStatus(msg, cls) { const s = document.getElementById('status'); s.textContent = msg || ''; s.className = 'status ' + (cls || ''); }
+
+/* ------------------------------------------------------------------ HID-Transport */
+const pending = [];   // {match:(r)=>bool, resolve, reject, timer}
+function onInputReport(ev) {
+  const r = new Uint8Array(ev.data.buffer, ev.data.byteOffset, Math.min(8, ev.data.byteLength));
+  for (let i = 0; i < pending.length; i++) {
+    if (pending[i].match(r)) { const p = pending.splice(i,1)[0]; clearTimeout(p.timer); p.resolve(r); return; }
+  }
+}
+async function send(bytes) {
+  const d = new Uint8Array(8); d.set(bytes.slice(0,8));
+  await device.sendReport(0, d);
+}
+function request(bytes, match, timeoutMs = 600) {
+  return new Promise(async (resolve, reject) => {
+    const p = { match, resolve, reject, timer: setTimeout(() => { const i = pending.indexOf(p); if (i >= 0) pending.splice(i,1); reject(new Error('timeout')); }, timeoutMs) };
+    pending.push(p);
+    try { await send(bytes); } catch (e) { clearTimeout(p.timer); const i = pending.indexOf(p); if (i >= 0) pending.splice(i,1); reject(e); }
+  });
+}
+const cmdInfo    = () => request([CMD.INFO], r => r[0] === CMD.INFO);
+const cmdRead    = off => request([CMD.READ, off & 255, off >> 8], r => r[0] === CMD.READ && r[1] === (off & 255) && r[2] === (off >> 8));
+const cmdWrite   = (off, d5) => request([CMD.WRITE, off & 255, off >> 8, ...d5], r => r[0] === CMD.WRITE && r[1] === (off & 255) && r[2] === (off >> 8));
+const cmdSimple  = c => request([c], r => r[0] === c, 1500);
+const cmdLive    = idx => request([CMD.LIVE, idx], r => r[0] === CMD.LIVE && r[1] === idx, 300);
+const cmdPinInfo = idx => request([CMD.PININFO, idx], r => r[0] === CMD.PININFO && r[1] === idx);
+
+async function connect() {
+  if (device) { await disconnect(); return; }
+  if (!navigator.hid) return;
+  let devs;
+  try { devs = await navigator.hid.requestDevice({ filters: [{ vendorId: 0xFAFA, usagePage: 0xFF00 }] }); } catch (e) { return; }
+  if (!devs.length) return;
+  // Windows meldet jede HID-Schnittstelle einzeln; die richtige antwortet auf CFG_INFO.
+  // Windows reports each HID interface separately; the right one answers CFG_INFO.
+  const all = (await navigator.hid.getDevices()).filter(d => d.vendorId === 0xFAFA && d.productId === devs[0].productId);
+  const candidates = all.length ? all : devs;
+  for (const d of candidates) {
+    try {
+      if (!d.opened) await d.open();
+      device = d; d.addEventListener('inputreport', onInputReport);
+      const r = await cmdInfo();
+      info = { proto: r[1], board: r[2], fwMajor: r[3], fwMinor: r[4], size: r[5] | (r[6] << 8), numPins: r[7] };
+      break;
+    } catch (e) {
+      d.removeEventListener('inputreport', onInputReport);
+      try { await d.close(); } catch (e2) {}
+      device = null;
+    }
+  }
+  if (!device) { setStatus(t('st_nodev'), 'err'); return; }
+  ledwizId = (device.productId & 0x0F) + 1;
+  navigator.hid.addEventListener('disconnect', ev => { if (ev.device === device) disconnect(); });
+  document.getElementById('connectbtn').textContent = t('disconnect');
+  document.getElementById('connectbtn').classList.remove('primary');
+  document.getElementById('devbadge').textContent = t('connected');
+  await readPinInfo();
+  await loadConfig();
+  startLive();
+  renderInfo();
+}
+async function disconnect() {
+  stopLive();
+  if (device) { try { device.removeEventListener('inputreport', onInputReport); await device.close(); } catch (e) {} }
+  device = null; info = null; cfg = null; pinInfo = []; ledwizId = null;
+  document.getElementById('connectbtn').textContent = t('connect');
+  document.getElementById('connectbtn').classList.add('primary');
+  document.getElementById('devbadge').textContent = t('notconnected');
+  renderInfo(); renderAll(); setStatus('');
+}
+async function readPinInfo() {
+  pinInfo = [];
+  for (let i = 0; i < info.numPins; i += 3) {
+    const r = await cmdPinInfo(i);
+    for (let k = 0; k < 3 && i + k < info.numPins; k++) {
+      const port = r[2 + 2*k], b = r[3 + 2*k];
+      pinInfo.push({ port, bit: b & 7, adc: !!(b & 0x80), reserved: port >= 0xFE });
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ Konfiguration lesen/schreiben (config.h) */
+function parseConfig(buf) {
+  const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const c = { magic: String.fromCharCode(buf[0], buf[1]), version: buf[2], board: buf[3], size: v.getUint16(4, true), crc: v.getUint16(6, true),
+    flags: buf[8], nOut: buf[9], nIn: buf[10], nAxes: buf[11],
+    ws: { pin: buf[16], count: buf[17], order: buf[18] }, out: [], in: [], axes: [] };
+  let o = 20;
+  for (let i = 0; i < c.nOut; i++, o += 4) c.out.push({ type: buf[o], a: buf[o+1], b: buf[o+2], c: buf[o+3] });
+  for (let i = 0; i < c.nIn; i++, o += 4) c.in.push({ pin: buf[o], func: buf[o+1], shift: buf[o+2], flags: buf[o+3] });
+  for (let i = 0; i < c.nAxes; i++, o += 12) c.axes.push({ pin: buf[o], joy: buf[o+1], axis: buf[o+2], flags: buf[o+3],
+    min: v.getUint16(o+4, true), center: v.getUint16(o+6, true), max: v.getUint16(o+8, true), deadzone: buf[o+10] });
+  return c;
+}
+function serializeConfig(c) {
+  const size = 20 + 4*c.nOut + 4*c.nIn + 12*c.nAxes;
+  const buf = new Uint8Array(size), v = new DataView(buf.buffer);
+  buf[0] = 0x4C; buf[1] = 0x57; buf[2] = c.version; buf[3] = c.board; v.setUint16(4, size, true); v.setUint16(6, 0, true);
+  buf[8] = c.flags; buf[9] = c.nOut; buf[10] = c.nIn; buf[11] = c.nAxes;
+  buf[16] = c.ws.pin; buf[17] = c.ws.count; buf[18] = c.ws.order;
+  let o = 20;
+  for (const x of c.out) { buf[o] = x.type; buf[o+1] = x.a; buf[o+2] = x.b; buf[o+3] = x.c; o += 4; }
+  for (const x of c.in) { buf[o] = x.pin; buf[o+1] = x.func; buf[o+2] = x.shift; buf[o+3] = x.flags; o += 4; }
+  for (const x of c.axes) { buf[o] = x.pin; buf[o+1] = x.joy; buf[o+2] = x.axis; buf[o+3] = x.flags;
+    v.setUint16(o+4, x.min, true); v.setUint16(o+6, x.center, true); v.setUint16(o+8, x.max, true); buf[o+10] = x.deadzone; buf[o+11] = 0; o += 12; }
+  return buf;
+}
+async function loadConfig() {
+  busy = true; setStatus(t('st_reading'));
+  try {
+    const buf = new Uint8Array(info.size);
+    for (let off = 0; off < info.size; off += 5) {
+      const r = await cmdRead(off);
+      for (let k = 0; k < 5 && off + k < info.size; k++) buf[off + k] = r[3 + k];
+    }
+    cfg = parseConfig(buf);
+    renderAll(); setStatus(t('st_loaded'), 'ok');
+  } catch (e) { setStatus(t('st_timeout'), 'err'); }
+  busy = false;
+}
+async function writeConfig() {
+  const buf = serializeConfig(cfg);
+  setStatus(t('st_writing'));
+  for (let off = 0; off < buf.length; off += 5) {
+    const d5 = Array.from(buf.slice(off, off + 5)); while (d5.length < 5) d5.push(0);
+    await cmdWrite(off, d5);
+  }
+}
+async function applyOrSave(save) {
+  if (!device || busy) return;
+  if (hasConflicts()) { setStatus(t('st_fixfirst'), 'err'); return; }
+  busy = true;
+  try {
+    await writeConfig();
+    const r = await cmdSimple(save ? CMD.SAVE : CMD.APPLY);
+    if (r[1] === 0) setStatus(t(save ? 'st_saved' : 'st_applied'), 'ok'); else setStatus(t('st_invalid'), 'err');
+  } catch (e) { setStatus(t('st_timeout'), 'err'); }
+  busy = false;
+}
+
+/* ------------------------------------------------------------------ Live-Werte */
+function startLive() { stopLive(); liveTimer = setInterval(pollLive, 120); }
+function stopLive() { if (liveTimer) clearInterval(liveTimer); liveTimer = null; }
+async function pollLive() {
+  if (!device || busy) return;
+  const active = document.querySelector('.tab.active')?.id;
+  try {
+    if (active === 'tab-axes') {
+      for (let idx = 0; idx <= 2; idx++) {
+        const r = await cmdLive(idx);
+        for (let k = 0; k < 3; k++) live.axes[idx*3 + k] = r[2 + 2*k] | (r[3 + 2*k] << 8);
+      }
+      renderLiveAxes();
+    } else if (active === 'tab-inputs') {
+      const r = await cmdLive(3);
+      live.inputs = (r[2] | (r[3] << 8) | (r[4] << 16) | (r[5] << 24)) >>> 0;
+      renderLiveInputs();
+    }
+  } catch (e) {}
+}
+
+/* ------------------------------------------------------------------ Hilfen / helpers */
+function pinName(i) {
+  if (i === PIN_NONE) return t('none');
+  const b = BOARDS[info?.board];
+  const pi = pinInfo[i];
+  if (pi?.reserved) return (b?.names[i] || ('#' + i)) + ' (' + t('reserved') + ')';
+  if (b?.names[i]) return b.names[i];
+  if (pi) return 'P' + 'ABCDEFGHJKL'[pi.port] + pi.bit;
+  return '#' + i;
+}
+function pinSelect(value, { adcOnly = false, allowNone = true } = {}) {
+  const s = document.createElement('select');
+  if (allowNone) s.add(new Option(t('none'), PIN_NONE));
+  const hidden = BOARDS[info?.board]?.hidden || [];
+  for (let i = 0; i < (info?.numPins || 0); i++) {
+    const pi = pinInfo[i];
+    if (pi?.reserved || hidden.includes(i)) continue;
+    if (adcOnly && !pi?.adc) continue;
+    s.add(new Option(pinName(i), i));
+  }
+  s.value = String(value);
+  if (s.value !== String(value)) { s.add(new Option(pinName(value), value)); s.value = String(value); }
+  return s;
+}
+function toggle(checked, onchange) {
+  const l = document.createElement('label'); l.className = 'toggle';
+  const i = document.createElement('input'); i.type = 'checkbox'; i.checked = checked; i.onchange = () => onchange(i.checked);
+  l.append(i, document.createElement('span')); return l;
+}
+function numInput(value, min, max, onchange) {
+  const i = document.createElement('input'); i.type = 'number'; i.min = min; i.max = max; i.value = value;
+  i.onchange = () => { let v = Math.max(min, Math.min(max, Number(i.value) || 0)); i.value = v; onchange(v); };
+  return i;
+}
+function td(...children) { const c = document.createElement('td'); c.append(...children); return c; }
+function usedPins() {
+  const m = new Map(); if (!cfg) return m;
+  const add = p => { if (p !== PIN_NONE) m.set(p, (m.get(p) || 0) + 1); };
+  add(cfg.ws.pin); cfg.out.forEach(o => { if (o.type === OUT.GPIO) add(o.a); }); cfg.in.forEach(i => add(i.pin)); cfg.axes.forEach(a => add(a.pin));
+  return m;
+}
+function hasConflicts() {
+  if (!cfg) return false;
+  for (const n of usedPins().values()) if (n > 1) return true;
+  for (const o of cfg.out) if (o.type === OUT.WS2812 && (o.b === 0 || o.a + o.b > cfg.ws.count)) return true;
+  for (const a of cfg.axes) if (a.pin !== PIN_NONE && !(a.min < a.center && a.center < a.max)) return true;
+  return false;
+}
+function markConflict(el, bad, title) { el.classList.toggle('conflict', bad); el.title = bad ? title : ''; }
+
+/* ------------------------------------------------------------------ Rendern */
+function renderInfo() {
+  document.getElementById('i_board').textContent = info ? (BOARDS[info.board]?.name || ('#' + info.board)) : '–';
+  document.getElementById('i_fw').textContent = info ? `v${info.fwMajor}.${info.fwMinor} (Proto ${info.proto})` : '–';
+  document.getElementById('i_id').textContent = ledwizId ?? '–';
+  document.getElementById('i_pins').textContent = info ? info.numPins : '–';
+  const sel = document.getElementById('newid'); sel.innerHTML = '';
+  for (let i = 1; i <= 16; i++) sel.add(new Option(i, i)); if (ledwizId) sel.value = ledwizId;
+  const dis = !device;
+  ['loadbtn','applybtn','savebtn','setid','exportbtn','importbtn','defaultsbtn','dfubtn','testall','testoff'].forEach(id => document.getElementById(id).disabled = dis);
+}
+function renderAll() { renderInfo(); renderStrip(); renderOutputs(); renderInputs(); renderAxes(); }
+
+function renderStrip() {
+  const pinSel = document.getElementById('ws_pin'), cnt = document.getElementById('ws_count'), ord = document.getElementById('ws_order');
+  if (!cfg) { pinSel.innerHTML = ''; pinSel.add(new Option(t('none'), PIN_NONE)); pinSel.disabled = cnt.disabled = ord.disabled = true; return; }
+  pinSel.disabled = cnt.disabled = ord.disabled = false;
+  const s = pinSelect(cfg.ws.pin); pinSel.innerHTML = s.innerHTML; pinSel.value = String(cfg.ws.pin);
+  pinSel.onchange = () => { cfg.ws.pin = Number(pinSel.value); renderOutputs(); renderInputs(); renderAxes(); };
+  cnt.value = cfg.ws.count; cnt.onchange = () => { cfg.ws.count = Math.max(0, Math.min(255, Number(cnt.value) || 0)); cnt.value = cfg.ws.count; renderOutputs(); };
+  ord.value = String(cfg.ws.order); ord.onchange = () => { cfg.ws.order = Number(ord.value); };
+  const used = usedPins(); markConflict(pinSel, (used.get(cfg.ws.pin) || 0) > 1, t('conflict'));
+}
+
+function renderOutputs() {
+  const tb = document.querySelector('#t_out tbody'); tb.innerHTML = '';
+  if (!cfg) return;
+  const used = usedPins();
+  cfg.out.forEach((o, i) => {
+    const tr = document.createElement('tr');
+    const n = td(String(i + 1)); n.className = 'num';
+    const type = document.createElement('select');
+    type.add(new Option(t('none'), OUT.NONE)); type.add(new Option(t('gpio'), OUT.GPIO)); type.add(new Option(t('ws2812'), OUT.WS2812));
+    type.value = String(o.type);
+    type.onchange = () => { o.type = Number(type.value); if (o.type === OUT.GPIO) { o.a = PIN_NONE; o.b = 0; } if (o.type === OUT.WS2812) { o.a = 0; o.b = 1; o.c = 3; } renderOutputs(); renderStrip(); };
+    tr.append(n, td(type));
+    if (o.type === OUT.GPIO) {
+      const ps = pinSelect(o.a); ps.onchange = () => { o.a = Number(ps.value); renderOutputs(); renderStrip(); };
+      markConflict(ps, (used.get(o.a) || 0) > 1, t('conflict'));
+      tr.append(td(ps), td(toggle(!!(o.b & 1), v => { o.b = v ? 1 : 0; })), td(), td(), td());
+    } else if (o.type === OUT.WS2812) {
+      const bad = o.b === 0 || o.a + o.b > cfg.ws.count;
+      const first = numInput(o.a, 0, 254, v => { o.a = v; renderOutputs(); }), count = numInput(o.b, 1, 255, v => { o.b = v; renderOutputs(); });
+      markConflict(first, bad, t('rangeerr')); markConflict(count, bad, t('rangeerr'));
+      const ch = document.createElement('select');
+      [['0', t('red')], ['1', t('green')], ['2', t('blue')], ['3', t('white')]].forEach(([v, n2]) => ch.add(new Option(n2, v)));
+      ch.value = String(o.c); ch.onchange = () => { o.c = Number(ch.value); };
+      tr.append(td(), td(), td(first), td(count), td(ch));
+    } else {
+      tr.append(td(), td(), td(), td(), td());
+    }
+    const tb2 = document.createElement('button'); tb2.className = 'small'; tb2.textContent = t('test'); tb2.disabled = o.type === OUT.NONE;
+    tb2.onclick = () => testOutput(i);
+    tr.append(td(tb2));
+    tb.append(tr);
+  });
+}
+
+function renderInputs() {
+  const tb = document.querySelector('#t_in tbody'); tb.innerHTML = '';
+  if (!cfg) return;
+  const used = usedPins(), groups = funcGroups();
+  const funcSel = (value, onchange) => {
+    const s = document.createElement('select'); s.add(new Option(t('none'), 0));
+    for (const [gname, items] of groups) { const og = document.createElement('optgroup'); og.label = gname; items.forEach(([c, n]) => og.append(new Option(n, c))); s.append(og); }
+    s.value = String(value); if (s.value !== String(value)) { s.add(new Option('0x' + value.toString(16), value)); s.value = String(value); }
+    s.onchange = () => onchange(Number(s.value)); return s;
+  };
+  cfg.in.forEach((x, i) => {
+    const tr = document.createElement('tr');
+    const n = td(String(i + 1)); n.className = 'num';
+    const ps = pinSelect(x.pin); ps.onchange = () => { x.pin = Number(ps.value); renderInputs(); renderOutputs(); renderStrip(); renderAxes(); };
+    markConflict(ps, (used.get(x.pin) || 0) > 1, t('conflict'));
+    const dot = document.createElement('span'); dot.className = 'dot'; dot.dataset.idx = i;
+    tr.append(n, td(ps), td(funcSel(x.func, v => { x.func = v; })), td(funcSel(x.shift, v => { x.shift = v; })),
+      td(toggle(!!(x.flags & 1), v => { x.flags = v ? 1 : 0; })), td(dot));
+    tb.append(tr);
+  });
+  renderLiveInputs();
+}
+function renderLiveInputs() {
+  // Live-Maske zählt nur konfigurierte Eingänge in Reihenfolge / live mask counts only configured inputs in order
+  if (!cfg) return;
+  let k = 0;
+  document.querySelectorAll('#t_in .dot').forEach(dot => {
+    const x = cfg.in[Number(dot.dataset.idx)];
+    if (x.pin === PIN_NONE) { dot.classList.remove('on'); return; }
+    dot.classList.toggle('on', !!(live.inputs & (1 << k))); k++;
+  });
+}
+
+/* Die Firmware zählt nur konfigurierte Achsen (Pin gesetzt, ADC-fähig) in Reihenfolge – Live-Wert dazu suchen.
+ * The firmware counts only configured axes (pin set, ADC capable) in order – look up the live value for cfg index i. */
+function liveAxis(i) {
+  let k = 0;
+  for (let j = 0; j < i; j++) { const a = cfg.axes[j]; if (a.pin !== PIN_NONE && pinInfo[a.pin]?.adc) k++; }
+  const a = cfg.axes[i];
+  return (a.pin !== PIN_NONE && pinInfo[a.pin]?.adc) ? (live.axes[k] || 0) : 0;
+}
+function axisScale(a, raw) {   // identisch zu panel.c axis_scale() / identical to the firmware
+  let v;
+  if (raw <= a.center) { const span = a.center - a.min; if (span <= 0) return 0; raw = Math.max(raw, a.min); v = -Math.round((a.center - raw) * 127 / span); }
+  else { const span = a.max - a.center; if (span <= 0) return 0; raw = Math.min(raw, a.max); v = Math.round((raw - a.center) * 127 / span); }
+  const dz = a.deadzone;
+  if (dz > 0 && dz < 127) { const mag = Math.abs(v); if (mag <= dz) v = 0; else { const m = Math.round((mag - dz) * 127 / (127 - dz)); v = v < 0 ? -m : m; } }
+  v = Math.max(-127, Math.min(127, v));
+  if (a.flags & 1) v = -v;
+  return v;
+}
+function renderAxes() {
+  const tb = document.querySelector('#t_ax tbody'); tb.innerHTML = '';
+  if (!cfg) return;
+  const used = usedPins();
+  cfg.axes.forEach((a, i) => {
+    const tr = document.createElement('tr');
+    const n = td(String(i + 1)); n.className = 'num';
+    const ps = pinSelect(a.pin, { adcOnly: true }); ps.onchange = () => { a.pin = Number(ps.value); renderAxes(); renderInputs(); renderOutputs(); renderStrip(); };
+    markConflict(ps, (used.get(a.pin) || 0) > 1, t('conflict'));
+    const joy = document.createElement('select'); for (let j = 0; j < 4; j++) joy.add(new Option(`${t('joystick')} ${j+1}`, j)); joy.value = String(a.joy); joy.onchange = () => { a.joy = Number(joy.value); };
+    const ax = document.createElement('select'); ['X','Y','Z','Rz'].forEach((nm, k) => ax.add(new Option(nm, k))); ax.value = String(a.axis); ax.onchange = () => { a.axis = Number(ax.value); };
+    const calBtn = (label, prop) => { const b = document.createElement('button'); b.className = 'small'; b.textContent = t('set'); b.title = label; b.onclick = () => { a[prop] = liveAxis(i); renderAxes(); }; return b; };
+    const mn = numInput(a.min, 0, 1023, v => { a.min = v; renderAxes(); }), ce = numInput(a.center, 0, 1023, v => { a.center = v; renderAxes(); }), mx = numInput(a.max, 0, 1023, v => { a.max = v; renderAxes(); });
+    const badCal = a.pin !== PIN_NONE && !(a.min < a.center && a.center < a.max);
+    [mn, ce, mx].forEach(e => markConflict(e, badCal, 'min < Mitte/center < max'));
+    const dz = document.createElement('input'); dz.type = 'range'; dz.min = 0; dz.max = 100; dz.value = Math.round(a.deadzone * 100 / 127);
+    const dzl = document.createElement('span'); dzl.className = 'hint'; dzl.textContent = ' ' + dz.value + ' %';
+    dz.oninput = () => { a.deadzone = Math.round(Number(dz.value) * 127 / 100); dzl.textContent = ' ' + dz.value + ' %'; renderLiveAxes(); };
+    const bar = document.createElement('div'); bar.className = 'bar'; bar.dataset.idx = i;
+    bar.innerHTML = '<u></u><b></b><i></i>';
+    const raw = document.createElement('span'); raw.className = 'hint'; raw.dataset.raw = i; raw.textContent = ' 0';
+    const out = document.createElement('strong'); out.dataset.out = i; out.textContent = '0';
+    tr.append(n, td(ps), td(joy), td(ax), td(toggle(!!(a.flags & 1), v => { a.flags = v ? 1 : 0; })),
+      td(mn, calBtn('Min', 'min')), td(ce, calBtn(t('center'), 'center')), td(mx, calBtn('Max', 'max')), td(dz, dzl), td(bar, raw), td(out));
+    tb.append(tr);
+  });
+  renderLiveAxes();
+}
+function renderLiveAxes() {
+  if (!cfg) return;
+  document.querySelectorAll('#t_ax .bar').forEach(bar => {
+    const i = Number(bar.dataset.idx), a = cfg.axes[i], raw = liveAxis(i);
+    const pct = v => (v * 100 / 1023).toFixed(1) + '%';
+    bar.querySelector('b').style.width = pct(raw);
+    bar.querySelector('i').style.left = pct(a.center);
+    const u = bar.querySelector('u'), dzraw = a.deadzone / 127;
+    const lo = a.center - dzraw * (a.center - a.min), hi = a.center + dzraw * (a.max - a.center);
+    u.style.left = pct(lo); u.style.width = pct(Math.max(0, hi - lo));
+    const rawEl = document.querySelector(`[data-raw="${i}"]`); if (rawEl) rawEl.textContent = ' ' + raw;
+    const outEl = document.querySelector(`[data-out="${i}"]`); if (outEl) outEl.textContent = a.pin === PIN_NONE ? '–' : axisScale(a, raw);
+  });
+}
+
+/* ------------------------------------------------------------------ Ausgangs-Test (LED-Wiz SBA/PBA) */
+async function sendLedwiz(levels) {   // levels: 32 × 0..48
+  if (!device) return;
+  await send([CMD.SBA, 0xFF, 0xFF, 0xFF, 0xFF, 2, 0, 0]);
+  for (let bank = 0; bank < 4; bank++) await send(levels.slice(bank * 8, bank * 8 + 8));
+}
+async function testOutput(i) { const l = new Array(32).fill(0); l[i] = 48; try { await sendLedwiz(l); } catch (e) {} }
+document.getElementById('testall').onclick = () => sendLedwiz(new Array(32).fill(48));
+document.getElementById('testoff').onclick = () => sendLedwiz(new Array(32).fill(0));
+
+/* ------------------------------------------------------------------ Dialog */
+function confirmDlg(title, body) {
+  return new Promise(resolve => {
+    const d = document.getElementById('dlg');
+    document.getElementById('dlg_title').textContent = title; document.getElementById('dlg_body').textContent = body;
+    const ok = document.getElementById('dlg_ok'), cancel = document.getElementById('dlg_cancel');
+    const done = v => { d.close(); ok.onclick = cancel.onclick = null; resolve(v); };
+    ok.onclick = () => done(true); cancel.onclick = () => done(false);
+    d.showModal();
+  });
+}
+
+/* ------------------------------------------------------------------ Gerät-Aktionen */
+document.getElementById('setid').onclick = async () => {
+  const id = Number(document.getElementById('newid').value);
+  if (!await confirmDlg(t('confirm_id'), t('confirm_id2'))) return;
+  const v = id - 1; try { await send([CMD.SETID, v, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, (~v) & 0xFF]); } catch (e) {}
+  setTimeout(disconnect, 300);
+};
+document.getElementById('dfubtn').onclick = async () => {
+  if (!await confirmDlg(t('confirm_dfu'), t('confirm_dfu2'))) return;
+  try { await send([CMD.DFU, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); } catch (e) {}
+  setTimeout(disconnect, 300);
+};
+document.getElementById('defaultsbtn').onclick = async () => {
+  if (!device || !await confirmDlg(t('confirm_defaults'), t('confirm_defaults2'))) return;
+  busy = true;
+  try { await cmdSimple(CMD.DEFAULTS); busy = false; await loadConfig(); setStatus(t('st_defaults'), 'ok'); } catch (e) { busy = false; setStatus(t('st_timeout'), 'err'); }
+};
+document.getElementById('exportbtn').onclick = () => {
+  if (!cfg) return;
+  const blob = new Blob([JSON.stringify({ lwcloneu2: 1, board: cfg.board, boardName: BOARDS[cfg.board]?.name, config: cfg }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `lwcloneu2-${(BOARDS[cfg.board]?.name || 'board').replace(/[^a-z0-9]+/gi, '_').toLowerCase()}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+document.getElementById('importbtn').onclick = () => document.getElementById('importfile').click();
+document.getElementById('importfile').onchange = async ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f || !cfg) return;
+  try {
+    const j = JSON.parse(await f.text());
+    const c = j.config;
+    if (!c || c.board !== cfg.board || c.nOut !== cfg.nOut || c.nIn !== cfg.nIn || c.nAxes !== cfg.nAxes) throw new Error('mismatch');
+    cfg = parseConfig(serializeConfig(c));   // normalisiert / normalizes
+    renderAll(); setStatus(f.name, 'ok');
+  } catch (e) { setStatus(t('importerr'), 'err'); }
+};
+
+/* ------------------------------------------------------------------ UI-Verdrahtung */
+document.getElementById('connectbtn').onclick = connect;
+document.getElementById('loadbtn').onclick = () => { if (device && !busy) loadConfig(); };
+document.getElementById('applybtn').onclick = () => applyOrSave(false);
+document.getElementById('savebtn').onclick = () => applyOrSave(true);
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + b.dataset.tab));
+  try { localStorage.setItem('lwc_tab', b.dataset.tab); } catch (e) {}
+});
+try { const tb = localStorage.getItem('lwc_tab'); if (tb) document.querySelector(`.tabs button[data-tab="${tb}"]`)?.click(); } catch (e) {}
+
+if (!navigator.hid) { document.getElementById('unsupported').style.display = ''; document.getElementById('connectbtn').disabled = true; }
+applyLang();
+</script>
+</body>
+</html>

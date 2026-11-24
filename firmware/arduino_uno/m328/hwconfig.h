@@ -1,6 +1,8 @@
 /*
- * LWCloneU2
+ * LWCloneU2 – Arduino Uno, Haupt-MCU ATmega328P (hinter dem ATmega8U2/16U2)
+ *
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,9 +11,6 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #ifndef HWCONFIG_H__INCLUDED
@@ -24,8 +23,8 @@
 #error "invalid CPU clock frequency ==> should be 16 MHZ"
 #endif
 
-#if !defined(__AVR_ATmega8__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega328__) 
-#error "invalid CPU type ==> should be ATMega8/168/328"
+#if !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega328__) && !defined(__AVR_ATmega328P__)
+#error "invalid CPU type ==> should be ATMega168/328"
 #endif
 
 #include "../devconfig.h"
@@ -33,7 +32,7 @@
 
 
 /****************************************
- LED driver config
+ LED driver config (Timer 0, 200 µs)
 ****************************************/
 
 #if defined(ENABLE_LED_DEVICE)
@@ -63,7 +62,27 @@ static void inline led_timer_init(void)
 
 
 /****************************************
- Data UART config
+ ADC config (kein MUX5 beim ATmega328 / no MUX5 on the ATmega328)
+****************************************/
+
+static void inline ADC_init(void)
+{
+	ADMUX = (1 << REFS0); // AVCC als Referenz / AVCC as reference
+
+	ADCSRA =
+		(1 << ADEN) |
+		(1 << ADIE) |
+		(1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // prescaler 128
+}
+
+static void inline ADC_setmux(uint8_t mux)
+{
+	ADMUX = (uint8_t)((ADMUX & ~0x0F) | (mux & 0x0F));
+}
+
+
+/****************************************
+ Data UART config (UART0 → ATmega8U2/16U2)
 ****************************************/
 
 #define DATA_TX_UART_vect   USART_UDRE_vect
@@ -80,7 +99,7 @@ static void inline data_uart_init(void)
 
 
 /****************************************
- Clock config
+ Clock config (Timer 1, 1 ms)
 ****************************************/
 
 #define CLOCK_COMPARE_MATCH_vect TIMER1_COMPA_vect
@@ -93,7 +112,5 @@ static void inline clock_init(void)
 	TCCR1B = _BV(CS10); //  normal mode, no prescale
 	TIMSK1 = _BV(OCIE1A); // enable Output Compare 1 interrupt
 }
-
-
 
 #endif

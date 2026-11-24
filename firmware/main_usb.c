@@ -1,6 +1,8 @@
 /*
- * LWCloneU2
+ * LWCloneU2 – Hauptprogramm des USB-MCUs / main program of the USB MCU
+ *
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,12 +11,26 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
+ */
+
+/*
+ * Zwei Betriebsarten / two modes:
  *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  - Ein-Chip (Leonardo, Pro Micro, Breakout 32U2): Dieser MCU hat USB *und* die Pins.
+ *    Reports gehen direkt an proto.c, Antworten und Panel-Reports kommen direkt von hier.
+ *
+ *  - Brücke (ATmega16U2/8U2 auf Mega/Uno, DATA_TX_UART_vect definiert): Dieser MCU hat nur USB.
+ *    8-Byte-Reports werden über die UART an den Haupt-MCU (main_led.c) weitergereicht; von dort
+ *    kommen Panel-Reports (Byte 0 = Report-ID 1..7) und Konfigurations-Antworten (Byte 0 >= 0xA0),
+ *    die hier auf den jeweiligen Endpunkt gelegt werden.
+ *
+ *  Die LED-Wiz-ID (SETID) wird immer hier gespeichert, denn sie gehört zum USB-Deskriptor.
+ *  The LED-Wiz id (SETID) is always stored here because it belongs to the USB descriptor.
  */
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
 #include <avr/io.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
@@ -29,12 +45,17 @@
 
 #include <hwconfig.h>
 #include "comm.h"
-#include "led.h"
+#include "clock.h"
 #include "panel.h"
+#include "proto.h"
 
+#if defined(DATA_TX_UART_vect)
+	#define USB_BRIDGE 1
+#else
+	#include "config.h"
+	#include "outputs.h"
+#endif
 
-#define LWCCONFIG_CMD_SETID 65
-#define LWCCONFIG_CMD_DFU   66
 
 #define LWC_CONFIG_IDENTIFIER 0xA62817B2   // some magic number(s)
 #define RESETSTATE_BOOTLOADER 0x42B8217C
@@ -45,11 +66,13 @@
 uint32_t g_resetstate __attribute__ ((section (".noinit")));
 
 typedef struct {
-	uint32_t id; 
+	uint32_t id;
 	uint8_t ledwiz_id;
 	uint8_t reserved[7];
 } lwc_config_t;
 
+/* liegt am EEPROM-Anfang; die Laufzeit-Konfiguration (config.c) beginnt bei Adresse 64
+ * lives at the start of the EEPROM; the runtime configuration (config.c) starts at address 64 */
 static struct {
 	uint8_t reserved[16];
 	uint8_t configdata[sizeof(lwc_config_t)];
@@ -58,14 +81,10 @@ static struct {
 
 static void hardware_init(void);
 static void main_task(void);
-static uint8_t* buffer_lock(void);
-static void buffer_unlock(void);
 static void hardware_restart(bool enter_bootloader);
 static void configure_device(void);
+static void handle_output_report(uint8_t *p8);
 
-
-// Main program entry point. This routine configures the hardware required by the application, then
-// enters a loop to run the application tasks in sequence.
 
 int main(void)
 {
@@ -75,10 +94,6 @@ int main(void)
 	sei();
 
 	DbgOut(DBGINFO, "enter main loop");
-
-	do {
-		USB_USBTask();
-	} while (USB_DeviceState != DEVICE_STATE_Configured);
 
 	for (;;)
 	{
@@ -99,13 +114,15 @@ static void hardware_init(void)
 
 	#if defined(BOOTLOADER_START_ADDR)
 	// if that was a reset due to watchdog timeout that we issued, call the bootloader
-	if ((mcusr & (1 << WDRF)) && 
+	if ((mcusr & (1 << WDRF)) &&
 	    (g_resetstate == RESETSTATE_BOOTLOADER))
 	{
 		g_resetstate = 0;
 		void (*bootloader)(void) = (void*)(BOOTLOADER_START_ADDR);
 		bootloader();
 	}
+	#else
+	(void)mcusr;
 	#endif
 
 	// Disable clock division
@@ -113,13 +130,15 @@ static void hardware_init(void)
 
 	set_sleep_mode(SLEEP_MODE_IDLE);
 
-	// initialize LED driver and UART and panel
 	clock_init();
 	comm_init();
-	led_init();
-	panel_init();
 
-	// config
+	#if !defined(USB_BRIDGE)
+	config_init();
+	outputs_init();
+	panel_init();
+	#endif
+
 	configure_device();
 }
 
@@ -146,87 +165,129 @@ static void configure_device(void)
 }
 
 
-static void main_task(void)
+/* 64-Byte-Input-Report auf dem LED-Endpunkt: 8 Byte Nutzdaten + Nullen
+ * 64 byte input report on the LED endpoint: 8 bytes payload + zeros */
+static bool send_led_reply(const uint8_t *p8)
 {
-#if defined(ENABLE_PANEL_DEVICE)
+	#if defined(ENABLE_LED_DEVICE)
+	Endpoint_SelectEndpoint(LED_EPADDR);
 
-	/* Select the Joystick Report Endpoint */
+	if (!Endpoint_IsINReady())
+		return false;
+
+	Endpoint_Write_Stream_LE(p8, PROTO_REPORT_SIZE, NULL);
+	Endpoint_Null_Stream(LED_EPSIZE - PROTO_REPORT_SIZE, NULL);
+	Endpoint_ClearIN();
+	return true;
+	#else
+	(void)p8;
+	return true;
+	#endif
+}
+
+static bool send_panel_report(const uint8_t *pdata, uint8_t ndata)
+{
+	#if defined(ENABLE_PANEL_DEVICE)
 	Endpoint_SelectEndpoint(PANEL_EPADDR);
 
-	/* Check to see if the host is ready for another packet */
 	if (!Endpoint_IsINReady())
+		return false;
+
+	Endpoint_Write_Stream_LE(pdata, ndata, NULL);
+	Endpoint_ClearIN();
+	return true;
+	#else
+	(void)pdata; (void)ndata;
+	return true;
+	#endif
+}
+
+
+static void main_task(void)
+{
+	#if !defined(USB_BRIDGE)
+	outputs_task();
+	#endif
+
+	if (USB_DeviceState != DEVICE_STATE_Configured)
 		return;
 
-	#if defined(DATA_RX_UART_vect)
+	#if defined(USB_BRIDGE)
 
+	/* Nachrichten vom Haupt-MCU / messages from the main MCU */
 	msg_t * const pmsg = msg_recv();
 
 	if (pmsg != NULL)
 	{
-		DbgOut(DBGINFO, "main_usb, message received");
-
-		// is the message valid?
+		bool done = true;
 
 		if (pmsg->nlen < 2 || pmsg->nlen > 8)
 		{
 			DbgOut(DBGERROR, "main_usb, invalid framesize");
 		}
+		else if (proto_is_cfg_cmd(pmsg->data[0]))
+		{
+			uint8_t r[PROTO_REPORT_SIZE];
+			memset(r, 0x00, sizeof(r));
+			memcpy(r, &pmsg->data[0], pmsg->nlen);
+			done = send_led_reply(r);
+		}
 		else
 		{
-			/* Write Joystick Report Data */
-			Endpoint_Write_Stream_LE(&pmsg->data[0], pmsg->nlen, NULL);
-
-			/* Finalize the stream transfer to send the last packet */
-			Endpoint_ClearIN();
+			done = send_panel_report(&pmsg->data[0], pmsg->nlen);
 		}
 
-		msg_release();
-	}
-
-	#elif defined(PANEL_TASK)
-
-	uint8_t * pdata;
-	uint8_t const ndata = panel_get_report(&pdata);
-
-	if (ndata > 0)
-	{
-		/* Write Joystick Report Data */
-		Endpoint_Write_Stream_LE(pdata, ndata, NULL);
-
-		/* Finalize the stream transfer to send the last packet */
-		Endpoint_ClearIN();
+		if (done)
+			msg_release();     /* sonst im nächsten Durchlauf erneut versuchen / else retry next time */
 	}
 
 	#else
 
-	#error "invalid configuration, panel is enabled but no uart-rx-ISR or panel-timer-ISR"
+	/* Konfigurations-Antworten / configuration replies */
+	{
+		#if defined(ENABLE_LED_DEVICE)
+		Endpoint_SelectEndpoint(LED_EPADDR);
+
+		if (Endpoint_IsINReady())
+		{
+			uint8_t r[PROTO_REPORT_SIZE];
+
+			if (proto_pop_reply(r))
+				send_led_reply(r);
+		}
+		#endif
+	}
+
+	/* Panel-Reports / panel reports */
+	{
+		#if defined(ENABLE_PANEL_DEVICE)
+		Endpoint_SelectEndpoint(PANEL_EPADDR);
+
+		if (Endpoint_IsINReady())
+		{
+			uint8_t * pdata = NULL;
+			uint8_t const ndata = panel_get_report(&pdata);
+
+			if (ndata > 0)
+				send_panel_report(pdata, ndata);
+		}
+		#endif
+	}
 
 	#endif
-
-#endif
 }
 
 
-// Event handler for the USB_Connect event. This indicates that the device is enumerating via the status LEDs and
-// starts the library USB task to begin the enumeration and USB management process.
- 
 void EVENT_USB_Device_Connect(void)
 {
 }
 
-// Event handler for the USB_Disconnect event. This indicates that the device is no longer connected to a host via
-// the status LEDs and stops the USB management and joystick reporting tasks.
- 
 void EVENT_USB_Device_Disconnect(void)
 {
 }
 
-// Event handler for the library USB Configuration Changed event.
-
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
-	// Setup HID Report Endpoint
-
 	Endpoint_ConfigureEndpoint(MISC_EPADDR, EP_TYPE_INTERRUPT, MISC_EPSIZE, 1);
 	#if defined(ENABLE_LED_DEVICE)
 	Endpoint_ConfigureEndpoint(LED_EPADDR, EP_TYPE_INTERRUPT, LED_EPSIZE, 1);
@@ -236,13 +297,8 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 	#endif
 }
 
-// Event handler for the USB_ControlRequest event. This is used to catch and process control requests sent to
-// the device from the USB host before passing along unhandled control requests to the library for processing
-// internally.
- 
 void EVENT_USB_Device_ControlRequest(void)
 {
-	// Handle HID Class specific requests
 	switch (USB_ControlRequest.bRequest)
 	{
 	case HID_REQ_GetReport:
@@ -258,61 +314,77 @@ void EVENT_USB_Device_ControlRequest(void)
 		}
 		break;
 
-	#if defined(ENABLE_LED_DEVICE)
 	case HID_REQ_SetReport:
 		if (USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_CLASS | REQREC_INTERFACE))
 		{
 			Endpoint_ClearSETUP();
 
-			DbgOut(DBGINFO, "HID_REQ_SetReport, bRequest: 0x%02X, wIndex: %d, wLength: %d, wValue: %d",
-				USB_ControlRequest.bRequest, USB_ControlRequest.wIndex, USB_ControlRequest.wLength, USB_ControlRequest.wValue);
+			uint8_t data[PROTO_REPORT_SIZE];
+			memset(data, 0x00, sizeof(data));
 
-			uint8_t * const pdata = buffer_lock();
+			uint16_t const nlen = (USB_ControlRequest.wLength < sizeof(data)) ? USB_ControlRequest.wLength : sizeof(data);
 
-			if (pdata != NULL)
+			Endpoint_Read_Control_Stream_LE(data, nlen);
+			Endpoint_ClearIN();
+
+			DbgOut(DBGINFO, "SetReport: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+				data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+
+			handle_output_report(data);
+		}
+		break;
+	}
+}
+
+
+static void handle_output_report(uint8_t *p8)
+{
+	/* Befehle, die den USB-MCU betreffen / commands that concern the USB MCU */
+	if (p8[0] == CMD_SETID || p8[0] == CMD_DFU)
+	{
+		const uint8_t id = p8[1];
+		const uint8_t check = (uint8_t)~id;
+
+		if (p8[2] == 0xFF && p8[3] == 0xFF && p8[4] == 0xFF && p8[5] == 0xFF && p8[6] == 0xFF && p8[7] == check)
+		{
+			if (p8[0] == CMD_SETID)
 			{
-				// Read the report data from the control endpoint
-				Endpoint_Read_Control_Stream_LE(pdata, 8);
+				eeprom_update_byte(
+					&g_eeprom_table.configdata[0] + OFFSET_OF(lwc_config_t, ledwiz_id),
+					id & 0x0F);
 
-				DbgOut(DBGINFO, "HID_REQ_SetReport: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", 
-					pdata[0], pdata[1], pdata[2], pdata[3], pdata[4], pdata[5], pdata[6], pdata[7]);
-
-				// if this is a special command to set the ledwiz ID, execute it
-				if (pdata[0] == LWCCONFIG_CMD_SETID)
-				{
-					const uint8_t id = pdata[1];
-					const uint8_t check = ~id;
-
-					if (pdata[2] == 0xFF &&
-					    pdata[3] == 0xFF &&
-					    pdata[4] == 0xFF &&
-					    pdata[5] == 0xFF &&
-					    pdata[6] == 0xFF &&
-					    pdata[7] == check)
-					{
-						eeprom_update_byte(
-							&g_eeprom_table.configdata[0] + OFFSET_OF(lwc_config_t, ledwiz_id),
-							id & 0x0F);
-
-						hardware_restart(false);
-					}
-				}
-
-				buffer_unlock();
+				hardware_restart(false);
 			}
 			else
 			{
-				uint8_t temp[8];
-				Endpoint_Read_Control_Stream_LE(temp, 8); // drop data
-
-				DbgOut(DBGERROR, "HID_REQ_SetReport: buffer overflow");
+				#if defined(BOOTLOADER_START_ADDR)
+				hardware_restart(true);
+				#endif
 			}
-
-			Endpoint_ClearIN();
 		}
-		break;
-	#endif
+
+		return;
 	}
+
+	#if defined(USB_BRIDGE)
+
+	msg_t * const pmsg = msg_prepare();
+
+	if (pmsg == NULL)
+	{
+		DbgOut(DBGERROR, "SetReport: tx buffer full");
+		return;
+	}
+
+	memcpy(&pmsg->data[0], p8, PROTO_REPORT_SIZE);
+	pmsg->nlen = PROTO_REPORT_SIZE;
+	msg_send();
+
+	#else
+
+	proto_handle_report(p8);
+
+	#endif
 }
 
 
@@ -336,43 +408,3 @@ static void hardware_restart(bool enter_bootloader)
 
 	for (;;) {;}
 }
-
-
-#if defined(LED_TIMER_vect)
-
-static uint8_t g_databuffer[8];
-
-static uint8_t * buffer_lock(void)
-{
-	return &g_databuffer[0];
-}
-
-void buffer_unlock(void)
-{
-	led_update(&g_databuffer[0]);
-}
-
-#endif
-
-
-#if defined(DATA_TX_UART_vect)
-
-static uint8_t * buffer_lock(void)
-{
-	msg_t * const pmsg = msg_prepare();
-
-	if (pmsg == NULL) {
-		return NULL;
-	}
-
-	pmsg->nlen = 8;
-
-	return &pmsg->data[0];
-}
-
-static void buffer_unlock(void)
-{
-	msg_send();
-}
-
-#endif

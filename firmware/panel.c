@@ -1,6 +1,8 @@
 /*
- * LWCloneU2
+ * LWCloneU2 – Eingänge: Tasten, Joysticks, Maus, Analog-Achsen / inputs
+ *
  * Copyright (C) 2013 Andreas Dittrich <lwcloneu2@cithraidt.de>
+ * Copyright (C) 2026 cyclemat
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation;
@@ -9,12 +11,9 @@
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program;
- * if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
- /* Name: hid_input.c
+/* Name: hid_input.c
  * Project: V-USB Mame Panel
  * Author: Andreas Oberdorfer
  * Creation Date: 2009-09-19
@@ -22,539 +21,492 @@
  * License: GNU GPL v2 (see License.txt) or proprietary (CommercialLicense.txt)
  */
 
+/*
+ * Entprellung und Report-Aufbau stammen aus dem V-USB-Mame-Panel; die Pin-Zuordnung kommt
+ * jetzt zur Laufzeit aus g_cfg (config.h) statt aus Compile-Zeit-Tabellen.
+ *
+ * Debouncing and report assembly come from the V-USB Mame Panel; the pin mapping now comes
+ * from g_cfg (config.h) at runtime instead of compile time tables.
+ */
+
 #include <string.h>
 #include <stdbool.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <avr/pgmspace.h>
 #include <util/atomic.h>
 
 #include <hwconfig.h>
+#include "config.h"
+#include "pins.h"
 #include "panel.h"
-#include "comm.h"
 #include "keydefs.h"
 #include "clock.h"
 
 
 #if !defined(PANEL_TASK)
-	void panel_init(void) {}
-	uint8_t panel_get_report(uint8_t **ppdata) { return 0; }
+
+void panel_init(void) {}
+void panel_apply_config(void) {}
+uint8_t panel_get_report(uint8_t **ppdata) { (void)ppdata; return 0; }
+uint16_t panel_get_axis_raw(uint8_t axis_index) { (void)axis_index; return 0; }
+uint32_t panel_get_input_mask(void) { return 0; }
+
 #else
 
 
-const int DEBOUNCE = 5;
-
-// derive the number of inputs from the table, let the compiler check that no pin is used twice
-enum { 
-	#define MAP(port, pin, normal_id, shift_id) port##pin##_index,
-	PANEL_MAPPING_TABLE(MAP)
-	NUMBER_OF_INPUTS,
-	#undef MAP
-	#if defined(LED_MAPPING_TABLE)
-	#define MAP(port, pin, inv) port##pin##_index,
-	LED_MAPPING_TABLE(MAP)
-	#undef MAP
-	#endif
-	#if defined(ADC_MAPPING_TABLE)
-	#define MAP(port, pin, mux, minval, maxval, joyid, axis) port##pin##_index,
-	ADC_MAPPING_TABLE(MAP)
-	#undef MAP
-	#endif
-};
-
-#if defined(ADC_MAPPING_TABLE)
-enum {
-	#define MAP(port, pin, mux, minval, maxval, joyid, axis) port##pin##_adcindex,
-	ADC_MAPPING_TABLE(MAP)
-	#undef MAP
-	NUM_ADC_CHANNELS
-};
+#if !defined(NUM_JOYSTICKS)
+#define NUM_JOYSTICKS 4
 #endif
 
-static uint8_t ReportBuffer[8];
-static uint8_t InputState[NUMBER_OF_INPUTS];
-static uint8_t shift_key = 0;
-static uint8_t shift_key_cleanup = 0;
-static uint8_t need_key_update = 0;
-static uint8_t need_consumer_update = 0;
+#define DEBOUNCE            5
+#define SCAN_INTERVAL_MS    5
+#define AXIS_HYSTERESIS     2      /* Mindeständerung für neuen Report / minimum change for a new report */
 
-#if (NUM_JOYSTICKS >= 1)
-static uint8_t need_joystick_update[NUM_JOYSTICKS];
-#endif
-
-#if (USE_ACCELGYRO)
-static uint8_t need_accelgyro_update = 0;
-#endif
-
-#if (USE_MOUSE != 0)
-static uint8_t need_mouse_update = 0;
-static uint8_t mouse_x_last_clk_state = 0;
-static uint8_t mouse_x_last_dir_state = 0;
-static int8_t mouse_x_count = 0;
-static uint8_t mouse_y_last_clk_state = 0;
-static uint8_t mouse_y_last_dir_state = 0;
-static int8_t mouse_y_count = 0;
-#if !defined(MOUSE_X_DELTA)
-#define MOUSE_X_DELTA 1
-#endif
-#if !defined(MOUSE_Y_DELTA)
-#define MOUSE_Y_DELTA 1
-#endif
-#endif
-
-#if defined(ENABLE_ANALOG_INPUT)
-static uint16_t adc_values[NUM_ADC_CHANNELS] = {0};
-static const uint8_t adc_mux_table[NUM_ADC_CHANNELS] = {
-	#define MAP(port, pin, mux, minval, maxval, joyid, axis) mux,
-	ADC_MAPPING_TABLE(MAP)
-	#undef MAP
-};
+#if !defined(MOUSE_DELTA)
+#define MOUSE_DELTA 1
 #endif
 
 
-// Shift switch off
-PROGMEM const uint8_t NormalMapping[NUMBER_OF_INPUTS] =
-{ 
-	#define MAP(port, pin, normal_id, shift_id) normal_id,
-	PANEL_MAPPING_TABLE(MAP)
-	#undef MAP
-};
+/* ---------------------------------------------------------------- digitale Eingänge / digital inputs */
 
-// Shift switch on
-PROGMEM const uint8_t ShiftMapping[NUMBER_OF_INPUTS] =
+typedef struct {
+	pin_io_t io;
+	uint8_t  func;
+	uint8_t  shift_func;
+	uint8_t  active_high;
+} input_t;
+
+static input_t  s_in[CFG_NUM_INPUTS];
+static uint8_t  s_nin = 0;
+static uint8_t  s_state[CFG_NUM_INPUTS];     /* Bit 7: gedrückt, Bits 0..6: Entprellzähler / debounce counter */
+static volatile uint32_t s_input_mask = 0;
+
+static int8_t   s_shift_idx = -1;
+static int8_t   s_mx_clk = -1, s_mx_dir = -1, s_my_clk = -1, s_my_dir = -1;
+
+static uint8_t  s_shift_key = 0;
+static uint8_t  s_shift_cleanup = 0;
+static uint8_t  s_need_key = 0;
+static uint8_t  s_need_consumer = 0;
+static uint8_t  s_need_mouse = 0;
+static uint8_t  s_need_joy[MAX_JOYSTICKS];
+static uint8_t  s_last_joy = 0;
+
+static uint8_t  s_mx_last_clk = 0, s_mx_last_dir = 0;
+static uint8_t  s_my_last_clk = 0, s_my_last_dir = 0;
+static int8_t   s_mouse_x = 0, s_mouse_y = 0;
+
+static uint8_t  s_report[KEYBOARD_REPORT_SIZE];
+
+
+/* ---------------------------------------------------------------- Analog-Achsen / analog axes */
+
+#if defined(BOARD_HAS_ADC)
+
+typedef struct {
+	uint8_t  mux;
+	uint8_t  joy;
+	uint8_t  axis;
+	uint8_t  flags;
+	uint16_t min;
+	uint16_t center;
+	uint16_t max;
+	uint8_t  deadzone;
+} axis_t;
+
+static axis_t           s_ax[CFG_NUM_AXES];
+static volatile uint8_t s_nax = 0;
+static volatile uint16_t s_adc_raw[CFG_NUM_AXES];
+
+#endif
+
+static int8_t s_axis_val[MAX_JOYSTICKS][NUM_AXES_PER_JOY];   /* aktuell berechnet / currently computed */
+static int8_t s_axis_sent[MAX_JOYSTICKS][NUM_AXES_PER_JOY];  /* zuletzt gemeldet / last reported */
+static uint8_t s_joy_has_analog[MAX_JOYSTICKS];
+
+
+/* ---------------------------------------------------------------- Hilfsfunktionen / helpers */
+
+#define IsKeyDown(index)  (s_state[index] & 0x80)
+
+static uint8_t GetKey(uint8_t i)
 {
-	#define MAP(port, pin, normal_id, shift_id) shift_id,
-	PANEL_MAPPING_TABLE(MAP)
-	#undef MAP
-};
+	return s_shift_key ? s_in[i].shift_func : s_in[i].func;
+}
 
-
-#define IsKeyDown(index) (InputState[index] & 0x80)
-
-static uint8_t GetKeyNormalMap(unsigned char index) { return (index < NUMBER_OF_INPUTS) ? pgm_read_byte(NormalMapping + index) : 0; }
-static uint8_t GetKeyShiftMap(unsigned char index) { return (index < NUMBER_OF_INPUTS) ? pgm_read_byte(ShiftMapping + index): 0; }
-static uint8_t IsKeyboardCode(uint8_t key) { return (key >= KEY_A) && (key <= MOD_RightGUI); }
-static uint8_t IsModifierCode(uint8_t key) { return (key >= MOD_LeftControl) && (key <= MOD_RightGUI); }
-static uint8_t IsConsumerCode(uint8_t key) { return (key >= AC_VolumeUp) && (key <= AC_Mute); }
-static uint8_t GetKey(uint8_t index) { return (shift_key != 0) ? GetKeyShiftMap(index) : GetKeyNormalMap(index); }
-
-
-#if (NUM_JOYSTICKS >= 1)
-
-static uint8_t IsJoystickCode(uint8_t key, uint8_t joy)
+static bool IsKeyboardCode(uint8_t key) { return (key >= KEY_A) && (key <= MOD_RightGUI); }
+static bool IsModifierCode(uint8_t key) { return (key >= MOD_LeftControl) && (key <= MOD_RightGUI); }
+static bool IsConsumerCode(uint8_t key) { return (key >= AC_VolumeUp) && (key <= AC_Mute); }
+static bool IsMouseButtonCode(uint8_t key) { return (key >= MB_Left) && (key <= MB_Middle); }
+static bool IsJoystickCode(uint8_t key, uint8_t joy)
 {
-	key -= (joy * NR_OF_EVENTS_PER_JOY);
-
+	key -= (uint8_t)(joy * NR_OF_EVENTS_PER_JOY);
 	return (key >= J1_Left) && (key < (J1_Left + NR_OF_EVENTS_PER_JOY));
 }
 
-static uint8_t NeedJoystickUpdate(void)
+static bool NeedJoystickUpdate(void)
 {
-	uint8_t i;
+	for (uint8_t i = 0; i < NUM_JOYSTICKS; i++)
+		if (s_need_joy[i])
+			return true;
 
-	for (i = 0; i < NUM_JOYSTICKS; i++)
-	{
-		if (need_joystick_update[i]) {
-			return 1;
-		}
-	}
-
-	return 0;
+	return false;
 }
 
-#endif
 
-#if (USE_ACCELGYRO)
+/* ---------------------------------------------------------------- Konfiguration / configuration */
 
-static uint8_t IsAccelGyroCode(uint8_t key)
+void panel_apply_config(void)
 {
-	key -= (4 * NR_OF_EVENTS_PER_JOY);
+	/* alte Pull-ups lösen / release old pull-ups */
+	for (uint8_t i = 0; i < s_nin; i++)
+		pins_mode_input(&s_in[i].io, false);
 
-	return (key >= J1_Left) && (key < (J1_Left + NR_OF_EVENTS_PER_JOY));
-}
+	s_nin = 0;
+	s_shift_idx = -1;
+	s_mx_clk = s_mx_dir = s_my_clk = s_my_dir = -1;
+	s_shift_key = 0;
+	s_shift_cleanup = 0;
+	memset(s_state, 0x00, sizeof(s_state));
+	s_input_mask = 0;
 
-#endif
-
-#if (USE_MOUSE != 0)
-
-static uint8_t IsMouseButtonCode(uint8_t key)
-{
-	return (key >= MB_Left) && (key <= MB_Middle);
-}
-
-static void MouseMoveX(uint8_t direction)
-{
-	if (direction)
+	for (uint8_t i = 0; i < CFG_NUM_INPUTS; i++)
 	{
-		if (mouse_x_count > -(127 - MOUSE_X_DELTA)) {
-		    mouse_x_count -= MOUSE_X_DELTA;
-		}
-	}
-	else
-	{
-		if (mouse_x_count < (127 - MOUSE_X_DELTA)) {
-		    mouse_x_count += MOUSE_X_DELTA;
-		}
-	}
+		cfg_input_t const * const c = &g_cfg.in[i];
+		input_t * const in = &s_in[s_nin];
 
-	need_mouse_update = 1;
-}
+		if (c->pin == CFG_PIN_NONE || !pins_resolve(c->pin, &in->io))
+			continue;
 
-static void MouseMoveY(uint8_t direction)
-{
-	if (direction)
-	{
-		if (mouse_y_count > -(127 - MOUSE_Y_DELTA)) {
-		    mouse_y_count -= MOUSE_Y_DELTA;
-		}
-	}
-	else
-	{
-		if (mouse_y_count < (127 - MOUSE_Y_DELTA)) {
-		    mouse_y_count += MOUSE_Y_DELTA;
-		}
-	}
+		in->func        = c->func;
+		in->shift_func  = c->shift_func;
+		in->active_high = (c->flags & INF_ACTIVE_HIGH) ? 1 : 0;
 
-	need_mouse_update = 1;
-}
+		pins_mode_input(&in->io, !in->active_high);
 
-static void CheckMouseUpdate(void)
-{
-	#if defined(MOUSE_X_CLK_INDEX) && defined(MOUSE_X_DIR_INDEX)
-
-	uint8_t mouse_clk_state = InputState[MOUSE_X_CLK_INDEX];
-	uint8_t mouse_dir_state = InputState[MOUSE_X_DIR_INDEX];
-
-	if (mouse_clk_state != mouse_x_last_clk_state)
-	{
-		if (mouse_dir_state == mouse_x_last_dir_state) {
-			MouseMoveX(mouse_clk_state ^ mouse_dir_state);
+		switch (c->func)
+		{
+		case SF_Shift:     s_shift_idx = (int8_t)s_nin; break;
+		case SF_MouseXClk: s_mx_clk    = (int8_t)s_nin; break;
+		case SF_MouseXDir: s_mx_dir    = (int8_t)s_nin; break;
+		case SF_MouseYClk: s_my_clk    = (int8_t)s_nin; break;
+		case SF_MouseYDir: s_my_dir    = (int8_t)s_nin; break;
+		default: break;
 		}
 
-		mouse_x_last_clk_state = mouse_clk_state;
+		s_nin++;
 	}
 
-	if (mouse_dir_state != mouse_x_last_dir_state)
+	/* Achsen / axes */
+	memset(s_joy_has_analog, 0x00, sizeof(s_joy_has_analog));
+
+	#if defined(BOARD_HAS_ADC)
 	{
-		if (mouse_clk_state == mouse_x_last_clk_state) {
-			MouseMoveX(!(mouse_clk_state ^ mouse_dir_state));
+		ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { s_nax = 0; }
+
+		uint8_t n = 0;
+
+		for (uint8_t i = 0; i < CFG_NUM_AXES; i++)
+		{
+			cfg_axis_t const * const c = &g_cfg.axes[i];
+
+			if (c->pin == CFG_PIN_NONE || c->joy >= MAX_JOYSTICKS || c->axis >= NUM_AXES_PER_JOY)
+				continue;
+
+			uint8_t const mux = pins_adc_mux(c->pin);
+			pin_io_t io;
+
+			if (mux == PIN_NO_ADC || !pins_resolve(c->pin, &io))
+				continue;
+
+			pins_mode_input(&io, false);   /* kein Pull-up am Poti / no pull-up on the pot */
+
+			s_ax[n].mux      = mux;
+			s_ax[n].joy      = c->joy;
+			s_ax[n].axis     = c->axis;
+			s_ax[n].flags    = c->flags;
+			s_ax[n].min      = c->min;
+			s_ax[n].center   = c->center;
+			s_ax[n].max      = c->max;
+			s_ax[n].deadzone = c->deadzone;
+			s_adc_raw[n]     = c->center;
+			s_joy_has_analog[c->joy] = 1;
+			n++;
 		}
 
-		mouse_x_last_dir_state = mouse_dir_state;
-	}
+		ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+		{
+			s_nax = n;
 
+			if (n > 0)
+			{
+				ADC_setmux(s_ax[0].mux);
+				ADCSRA |= (1 << ADSC);    /* Wandlungskette starten / start conversion chain */
+			}
+		}
+	}
 	#endif
 
-	#if defined(MOUSE_Y_CLK_INDEX) && defined(MOUSE_Y_DIR_INDEX)
+	memset(s_axis_val, 0x00, sizeof(s_axis_val));
+	memset(s_axis_sent, 0x00, sizeof(s_axis_sent));
 
-	mouse_clk_state = InputState[MOUSE_Y_CLK_INDEX];
-	mouse_dir_state = InputState[MOUSE_Y_DIR_INDEX];
+	for (uint8_t j = 0; j < NUM_JOYSTICKS; j++)
+		s_need_joy[j] = 1;    /* Ausgangszustand melden / report initial state */
 
-	if (mouse_clk_state != mouse_y_last_clk_state)
-	{
-		if (mouse_dir_state == mouse_y_last_dir_state) {
-			MouseMoveY(mouse_clk_state ^ mouse_dir_state);
-		}
-
-		mouse_y_last_clk_state = mouse_clk_state;
-	}
-
-	if (mouse_dir_state != mouse_y_last_dir_state)
-	{
-		if (mouse_clk_state == mouse_y_last_clk_state) {
-			MouseMoveY(!(mouse_clk_state ^ mouse_dir_state));
-		}
-
-		mouse_y_last_dir_state = mouse_dir_state;
-	}
-
-	#endif
+	s_need_key = 1;
+	s_need_consumer = 1;
 }
-
-static uint8_t NeedMouseUpdate(void) { return need_mouse_update; }
-
-#endif
 
 void panel_init(void)
 {
-	#if (NUM_JOYSTICKS >= 1)
-	memset(&need_joystick_update[0], 0x00, sizeof(need_joystick_update));
-	#endif
-
-	#define MAP(port, pin, normal_id, shift_id) \
-		PORT##port |= (1 << pin); \
-		DDR##port &= ~(1 << pin);
-	PANEL_MAPPING_TABLE(MAP)
-	#undef MAP
-
-	#if defined(ENABLE_ANALOG_INPUT) && defined(ADC_MAPPING_TABLE)
-	#define MAP(port, pin, mux, minval, maxval, joyid, axis) \
-		PORT##port &= ~(1 << pin); \
-		DDR##port &= ~(1 << pin);
-	ADC_MAPPING_TABLE(MAP)
-	#undef MAP
-
+	#if defined(BOARD_HAS_ADC)
 	ADC_init();
 	#endif
-};
 
-static void SetNeedUpdate(uint8_t index)
+	panel_apply_config();
+}
+
+
+/* ---------------------------------------------------------------- ADC */
+
+#if defined(BOARD_HAS_ADC)
+
+ISR(ADC_vect)
 {
-	uint8_t key = GetKey(index);
+	static uint8_t i = 0;
 
-	if (IsConsumerCode(key))
+	uint8_t const n = s_nax;
+
+	if (n == 0)
 	{
-		need_consumer_update = 1;
-		return;
+		i = 0;
+		return;         /* keine Achsen: Kette anhalten / no axes: stop the chain */
 	}
 
-	if (IsKeyboardCode(key))
+	if (i < n)
+		s_adc_raw[i] = ADC;
+
+	i++;
+	if (i >= n)
+		i = 0;
+
+	ADC_setmux(s_ax[i].mux);
+	ADCSRA |= (1 << ADSC);
+}
+
+uint16_t panel_get_axis_raw(uint8_t axis_index)
+{
+	uint16_t v = 0;
+
+	if (axis_index < CFG_NUM_AXES)
 	{
-		need_key_update = 1;
-		return;
+		ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = s_adc_raw[axis_index]; }
 	}
 
-	#if (USE_MOUSE != 0)
-	if (IsMouseButtonCode(key))
+	return v;
+}
+
+/* Rohwert → -127..127 mit Kalibrierung, Totzone und Invertierung
+ * raw value → -127..127 with calibration, dead zone and inversion */
+static int8_t axis_scale(const axis_t *a, uint16_t raw)
+{
+	int16_t v;
+
+	if (raw <= a->center)
 	{
-		need_mouse_update = 1;
-		return;
+		uint16_t const span = a->center - a->min;
+		if (span == 0) return 0;
+		if (raw < a->min) raw = a->min;
+		v = -(int16_t)(((uint32_t)(a->center - raw) * 127 + span / 2) / span);
 	}
-	#endif
-
-	#if (NUM_JOYSTICKS >= 1)
+	else
 	{
-		uint8_t i;
+		uint16_t const span = a->max - a->center;
+		if (span == 0) return 0;
+		if (raw > a->max) raw = a->max;
+		v = (int16_t)(((uint32_t)(raw - a->center) * 127 + span / 2) / span);
+	}
 
-		for (i = 0; i < NUM_JOYSTICKS; i++)
+	/* Totzone: innerhalb 0, außerhalb neu auf volle Breite skalieren
+	 * dead zone: zero inside, rescale to full range outside */
+	uint8_t const dz = a->deadzone;
+
+	if (dz > 0 && dz < 127)
+	{
+		int16_t const mag = (v < 0) ? -v : v;
+
+		if (mag <= dz)
 		{
-			if (IsJoystickCode(key, i))
+			v = 0;
+		}
+		else
+		{
+			int16_t const m = (int16_t)(((int32_t)(mag - dz) * 127 + (127 - dz) / 2) / (127 - dz));
+			v = (v < 0) ? -m : m;
+		}
+	}
+
+	if (v > 127) v = 127;
+	if (v < -127) v = -127;
+
+	if (a->flags & AXF_INVERT)
+		v = -v;
+
+	return (int8_t)v;
+}
+
+static void UpdateAnalogAxes(void)
+{
+	uint8_t const n = s_nax;
+
+	for (uint8_t i = 0; i < n; i++)
+	{
+		axis_t const * const a = &s_ax[i];
+		uint16_t raw;
+
+		ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { raw = s_adc_raw[i]; }
+
+		s_axis_val[a->joy][a->axis] = axis_scale(a, raw);
+	}
+
+	for (uint8_t j = 0; j < NUM_JOYSTICKS; j++)
+	{
+		if (!s_joy_has_analog[j])
+			continue;
+
+		for (uint8_t k = 0; k < NUM_AXES_PER_JOY; k++)
+		{
+			int16_t const d = (int16_t)s_axis_val[j][k] - (int16_t)s_axis_sent[j][k];
+			int16_t const mag = (d < 0) ? -d : d;
+			int8_t const v = s_axis_val[j][k];
+
+			if (mag >= AXIS_HYSTERESIS || (mag != 0 && (v == 0 || v == 127 || v == -127)))
 			{
-				need_joystick_update[i] = 1;
-				return;
+				s_need_joy[j] = 1;
+				break;
 			}
 		}
 	}
-	#endif
-
-	#if (USE_ACCELGYRO)
-	if (IsAccelGyroCode(key))
-	{
-		need_accelgyro_update = 1;
-		return;
-	}
-	#endif
 }
 
-#if defined(SHIFT_SWITCH_INDEX)
+#else
 
-static void ShiftKeyCleanUp(void)
-{
-	if (shift_key_cleanup == 1)
-	{
-		uint8_t i;
-		shift_key_cleanup = 2;
-
-		for (i = 0; i < NUMBER_OF_INPUTS; i++)
-		{
-			if (i != SHIFT_SWITCH_INDEX)
-			{
-				if (InputState[i] != 0)
-				{
-					if (GetKeyNormalMap(i) != GetKeyShiftMap(i))
-					{
-						SetNeedUpdate(i);
-						InputState[i] = 0;
-					}
-				}
-			}
-		}
-	}
-
-	if (shift_key_cleanup == 2)
-	{
-		bool no_update = !need_consumer_update && !need_key_update;
-
-		#if (USE_MOUSE != 0)
-		no_update = no_update && !NeedMouseUpdate();
-		#endif
-
-		#if (NUM_JOYSTICKS >= 1)
-		no_update = no_update && !NeedJoystickUpdate();
-		#endif
-
-		#if (USE_ACCELGYRO)
-		no_update = no_update && !need_accelgyro_update;
-		#endif
-
-		if (no_update)
-		{
-			shift_key_cleanup = 0;
-			shift_key = IsKeyDown(SHIFT_SWITCH_INDEX);
-		}
-	}
-}
+uint16_t panel_get_axis_raw(uint8_t axis_index) { (void)axis_index; return 0; }
+static void UpdateAnalogAxes(void) {}
 
 #endif
 
-static uint8_t NeedUpdate(void)
+
+/* ---------------------------------------------------------------- Maus-Encoder / mouse encoder */
+
+static void MouseMove(int8_t *count, uint8_t direction)
 {
-	#if defined(SHIFT_SWITCH_INDEX)
-	ShiftKeyCleanUp();
-	#endif
-
-	#if (USE_MOUSE != 0)
-	if (NeedMouseUpdate())
+	if (direction)
 	{
-		need_mouse_update = 0;
-		return ID_Mouse;
+		if (*count > -(127 - MOUSE_DELTA))
+			*count -= MOUSE_DELTA;
 	}
-	#endif
-
-	if (need_key_update)
+	else
 	{
-		need_key_update = 0;
-		return ID_Keyboard;
+		if (*count < (127 - MOUSE_DELTA))
+			*count += MOUSE_DELTA;
 	}
 
-	if (need_consumer_update)
+	s_need_mouse = 1;
+}
+
+static void CheckEncoder(int8_t iclk, int8_t idir, uint8_t *last_clk, uint8_t *last_dir, int8_t *count)
+{
+	if (iclk < 0 || idir < 0)
+		return;
+
+	uint8_t const clk = s_state[(uint8_t)iclk];
+	uint8_t const dir = s_state[(uint8_t)idir];
+
+	if (clk != *last_clk)
 	{
-		need_consumer_update = 0;
-		return ID_Consumer;
+		if (dir == *last_dir)
+			MouseMove(count, clk ^ dir);
+
+		*last_clk = clk;
 	}
 
-	uint8_t analog_update[NUM_JOYSTICKS + 1] = {0};
-	static uint8_t analog_counter[NUM_JOYSTICKS + 1];
-
-	#if (NUM_JOYSTICKS >= 1)
-	for (uint8_t i = 0; i < NUM_JOYSTICKS; i++)
+	if (dir != *last_dir)
 	{
-		if (analog_counter[i] < 0xFF && need_joystick_update[i])
-		    analog_counter[i] += 1;
+		if (clk == *last_clk)
+			MouseMove(count, !(clk ^ dir));
+
+		*last_dir = dir;
 	}
-	#endif
+}
 
-	#if (USE_ACCELGYRO)
-	if (analog_counter[NUM_JOYSTICKS] < 0xFF && need_accelgyro_update)
-		analog_counter[NUM_JOYSTICKS] += 1;
-	#endif
 
-	#if defined(ENABLE_ANALOG_INPUT) && defined(ADC_MAPPING_TABLE)
+/* ---------------------------------------------------------------- Abtastung / scanning */
 
-	#define MAP(port, pin, mux, minval, maxval, joyid, axis) \
-	if (joyid >= ID_Joystick1 && (joyid - ID_Joystick1) < NUM_JOYSTICKS) { analog_update[joyid - ID_Joystick1] = 1; } else \
-	if (joyid == ID_AccelGyro) { analog_update[NUM_JOYSTICKS] = 1; }
-	ADC_MAPPING_TABLE(MAP)
-	#undef MAP
+static void SetNeedUpdate(uint8_t index)
+{
+	uint8_t const key = GetKey(index);
 
-	for (uint8_t i = 0; i < sizeof(analog_update) / sizeof(analog_update[0]); i++)
+	if (IsConsumerCode(key))      { s_need_consumer = 1; return; }
+	if (IsKeyboardCode(key))      { s_need_key = 1; return; }
+	if (IsMouseButtonCode(key))   { s_need_mouse = 1; return; }
+
+	for (uint8_t j = 0; j < NUM_JOYSTICKS; j++)
 	{
-		if (analog_counter[i] < 0xFF && analog_update[i] > 0)
-		    analog_counter[i] += 1;
-	}
-
-	#endif
-
-	uint8_t ac_max = 0;
-	int8_t index_max = -1;
-
-	for (int8_t i = 0; i < sizeof(analog_update) / sizeof(analog_update[0]); i++)
-	{
-		if (ac_max < analog_counter[i])
+		if (IsJoystickCode(key, j))
 		{
-			ac_max = analog_counter[i];
-			index_max = i;
+			s_need_joy[j] = 1;
+			return;
 		}
 	}
+}
 
-	if (index_max >= 0)
+static void ShiftKeyCleanUp(void)
+{
+	if (s_shift_idx < 0)
+		return;
+
+	if (s_shift_cleanup == 1)
 	{
-		analog_counter[index_max] = 0;
+		s_shift_cleanup = 2;
 
-		#if (NUM_JOYSTICKS >= 1)
-		if (index_max < NUM_JOYSTICKS) {
-			need_joystick_update[index_max] = 0;
-			return index_max + ID_Joystick1;
+		for (uint8_t i = 0; i < s_nin; i++)
+		{
+			if ((int8_t)i == s_shift_idx || s_state[i] == 0)
+				continue;
+
+			if (s_in[i].func != s_in[i].shift_func)
+			{
+				SetNeedUpdate(i);
+				s_state[i] = 0;
+			}
 		}
-		#endif
-
-		#if (USE_ACCELGYRO)
-		need_accelgyro_update = 0;
-		return ID_AccelGyro;
-		#endif
 	}
 
-	return ID_Unknown;
+	if (s_shift_cleanup == 2)
+	{
+		bool const no_update = !s_need_consumer && !s_need_key && !s_need_mouse && !NeedJoystickUpdate();
+
+		if (no_update)
+		{
+			s_shift_cleanup = 0;
+			s_shift_key = IsKeyDown((uint8_t)s_shift_idx) ? 1 : 0;
+		}
+	}
 }
 
 static void SetInputCount(uint8_t index, uint8_t condition)
 {
-	#if (USE_MOUSE != 0) && defined(MOUSE_X_CLK_INDEX) && defined(MOUSE_X_DIR_INDEX)
-	if ((index == MOUSE_X_CLK_INDEX) || (index == MOUSE_X_DIR_INDEX))
+	/* Encoder-Signale werden nicht entprellt / encoder signals are not debounced */
+	if ((int8_t)index == s_mx_clk || (int8_t)index == s_mx_dir ||
+	    (int8_t)index == s_my_clk || (int8_t)index == s_my_dir)
 	{
-		InputState[index] = condition;
+		s_state[index] = condition;
 		return;
 	}
-	#endif
-
-	#if (USE_MOUSE != 0) && defined(MOUSE_Y_CLK_INDEX) && defined(MOUSE_Y_DIR_INDEX)
-	if ((index == MOUSE_Y_CLK_INDEX) || (index == MOUSE_Y_DIR_INDEX))
-	{
-		InputState[index] = condition;
-		return;
-	}
-	#endif
-
-	if (index >= NUMBER_OF_INPUTS)
-	{
-		return;
-	}
-
-	#if defined(MULTIFIRE_INDEX)
-	if (index == MULTIFIRE_INDEX)
-	{
-		static uint16_t ncycle = 0;
-		static uint8_t ncount = 0;
-		static uint8_t ndelay = 0;
-
-		// simple debounce
-		if (ndelay == 0 && condition)
-		{
-			ndelay = (100 / (DELTA_TIME_PANEL_REPORT_MS + 1));
-			ncount += MULTIFIRE_COUNT;
-		}
-		else if (ndelay > 1)
-		{
-			ndelay--;
-		}
-		else if (ndelay == 1)
-		{
-			if (!condition)
-				ndelay = 0;
-		}
-
-		condition = 0;
-
-		// state machine to generate multiple events
-		if (ncount > 0)
-		{
-			condition = (ncycle < (100 / (DELTA_TIME_PANEL_REPORT_MS + 1))) ? 1 : 0;
-
-			if (ncycle >= (600 / (DELTA_TIME_PANEL_REPORT_MS + 1)))
-			{
-				ncycle = 0;
-				ncount -= 1;
-			}
-			else
-			{
-				ncycle += 1;
-			}
-		}
-	}
-	#endif
 
 	uint8_t changed = 0;
-	uint8_t count = InputState[index];
+	uint8_t count = s_state[index];
 	uint8_t state = count & 0x80;
 	count &= 0x7f;
 
@@ -593,351 +545,242 @@ static void SetInputCount(uint8_t index, uint8_t condition)
 		}
 	}
 
-	InputState[index] = state | count;
+	s_state[index] = state | count;
 
 	if (changed)
 	{
-		#if defined(SHIFT_SWITCH_INDEX)
-		if (index == SHIFT_SWITCH_INDEX)
-		{
-			shift_key_cleanup = 1;
-		}
+		if ((int8_t)index == s_shift_idx)
+			s_shift_cleanup = 1;
 		else
-		#endif
-		{
 			SetNeedUpdate(index);
+	}
+}
+
+static void ScanInputs(void)
+{
+	if (s_shift_cleanup)
+		return;
+
+	uint32_t mask = 0;
+
+	for (uint8_t i = 0; i < s_nin; i++)
+	{
+		input_t const * const in = &s_in[i];
+		uint8_t const level = (*PIN_REG_PIN(&in->io) & in->io.mask) ? 1 : 0;
+		uint8_t const pressed = in->active_high ? level : (uint8_t)!level;
+
+		SetInputCount(i, pressed);
+
+		if (IsKeyDown(i))
+			mask |= (uint32_t)1 << i;
+	}
+
+	s_input_mask = mask;
+
+	CheckEncoder(s_mx_clk, s_mx_dir, &s_mx_last_clk, &s_mx_last_dir, &s_mouse_x);
+	CheckEncoder(s_my_clk, s_my_dir, &s_my_last_clk, &s_my_last_dir, &s_mouse_y);
+}
+
+uint32_t panel_get_input_mask(void)
+{
+	return s_input_mask;
+}
+
+static uint8_t NeedUpdate(void)
+{
+	ShiftKeyCleanUp();
+
+	if (s_need_mouse)
+	{
+		s_need_mouse = 0;
+		return ID_Mouse;
+	}
+
+	if (s_need_key)
+	{
+		s_need_key = 0;
+		return ID_Keyboard;
+	}
+
+	if (s_need_consumer)
+	{
+		s_need_consumer = 0;
+		return ID_Consumer;
+	}
+
+	/* Joysticks der Reihe nach / joysticks round robin */
+	for (uint8_t n = 0; n < NUM_JOYSTICKS; n++)
+	{
+		uint8_t const j = (uint8_t)((s_last_joy + 1 + n) % NUM_JOYSTICKS);
+
+		if (s_need_joy[j])
+		{
+			s_need_joy[j] = 0;
+			s_last_joy = j;
+			return (uint8_t)(ID_Joystick1 + j);
 		}
 	}
+
+	return ID_Unknown;
 }
 
-void panel_ScanInput(void)
-{
-	if (shift_key_cleanup) {
-		return;
-	}
 
-	#define MAP(port, pin, normal_id, shift_id) SetInputCount(port##pin##_index, 0 == (PIN##port & (1 << pin)));
-	PANEL_MAPPING_TABLE(MAP)
-	#undef MAP
+/* ---------------------------------------------------------------- Reports */
 
-	#if (USE_MOUSE != 0)
-	CheckMouseUpdate();
-	#endif
-}
-
-#if (USE_CONSUMER != 0)
 static uint8_t ReportConsumer(void)
 {
-	uint8_t i;
 	uint8_t consumer = 0;
 
-	for (i = 0; i < NUMBER_OF_INPUTS; i++)
+	for (uint8_t i = 0; i < s_nin; i++)
 	{
 		if (IsKeyDown(i))
 		{
-			uint8_t key = GetKey(i);
+			uint8_t const key = GetKey(i);
 
-			if (IsConsumerCode(key)) {
+			if (IsConsumerCode(key))
 				consumer |= ConsumerBit(key);
-			}
 		}
 	}
 
-	ReportBuffer[0] = ID_Consumer;
-	ReportBuffer[1] = consumer;
+	s_report[0] = ID_Consumer;
+	s_report[1] = consumer;
 
-	return 2;
+	return CONSUMER_REPORT_SIZE;
 }
-#endif
 
 static uint8_t ReportKeyboard(void)
 {
-	uint8_t i;
 	uint8_t r = 2;
 
-	memset(&ReportBuffer[1], 0x00, sizeof(ReportBuffer) - 1);
+	memset(&s_report[0], 0x00, sizeof(s_report));
+	s_report[0] = ID_Keyboard;
 
-	ReportBuffer[0] = ID_Keyboard;
-
-	for (i = 0; i < NUMBER_OF_INPUTS; i++)
+	for (uint8_t i = 0; i < s_nin; i++)
 	{
-		if (IsKeyDown(i))
+		if (!IsKeyDown(i))
+			continue;
+
+		uint8_t const key = GetKey(i);
+
+		if (!IsKeyboardCode(key))
+			continue;
+
+		if (IsModifierCode(key))
 		{
-			uint8_t key = GetKey(i);
-
-			if (IsKeyboardCode(key))
+			s_report[1] |= ModifierBit(key);
+		}
+		else if (r < KEYBOARD_REPORT_SIZE)
+		{
+			switch (key)
 			{
-				if (IsModifierCode(key))
-				{
-					ReportBuffer[1] |= ModifierBit(key);
-				}
-				else
-				{
-					if (r < sizeof(ReportBuffer))
-					{
-						switch (key)
-						{
-						case KM_ALT_F4:
-							ReportBuffer[1] |= ModifierBit(MOD_LeftAlt);
-							ReportBuffer[r] = KEY_F4;
-							break;
-						case KM_SHIFT_F7:
-							ReportBuffer[1] |= ModifierBit(MOD_LeftShift);
-							ReportBuffer[r] = KEY_F7;
-							break;
-						default:
-							ReportBuffer[r] = key;
-							break;
-						}
-
-						r++;
-					}
-				}
+			case KM_ALT_F4:
+				s_report[1] |= ModifierBit(MOD_LeftAlt);
+				s_report[r] = KEY_F4;
+				break;
+			case KM_SHIFT_F7:
+				s_report[1] |= ModifierBit(MOD_LeftShift);
+				s_report[r] = KEY_F7;
+				break;
+			default:
+				s_report[r] = key;
+				break;
 			}
+
+			r++;
 		}
 	}
 
-	return sizeof(ReportBuffer);
+	return KEYBOARD_REPORT_SIZE;
 }
-
-#if defined(ENABLE_ANALOG_INPUT)
-
-uint16_t ADC_getvalue(uint8_t id)
-{
-	uint16_t x;
-
-	ATOMIC_BLOCK(ATOMIC_FORCEON)
-	{
-		x = adc_values[id];
-	}
-
-	return x;
-}
-
-static int16_t joyval12(uint16_t x, int16_t minval, int16_t maxval)
-{
-	return (int16_t)(((int32_t)x * (int32_t)(maxval - minval) + (1 << 9)) >> 10) + minval - 2047;
-}
-
-static int8_t joyval8(uint16_t x, int16_t minval, int16_t maxval)
-{
-	return (int8_t)(((int32_t)x * (int32_t)(maxval - minval) + (1 << 9)) >> 10) + minval - 127;
-}
-
-#endif
-
-#if (NUM_JOYSTICKS >= 1)
 
 static uint8_t ReportJoystick(uint8_t id)
 {
-	uint8_t i;
-	int16_t joy_x = 0;
-	int16_t joy_y = 0;
-	uint8_t joy_b = 0;
+	uint8_t const joy = (uint8_t)(id - ID_Joystick1);
+	int8_t x  = s_axis_val[joy][AXIS_X];
+	int8_t y  = s_axis_val[joy][AXIS_Y];
+	int8_t z  = s_axis_val[joy][AXIS_Z];
+	int8_t rz = s_axis_val[joy][AXIS_RZ];
+	uint8_t buttons = 0;
 
-	ReportBuffer[0] = id;
+	uint8_t const base = (uint8_t)(joy * NR_OF_EVENTS_PER_JOY);
 
-	#if defined(ENABLE_ANALOG_INPUT) && defined(ADC_MAPPING_TABLE)
-	#define MAP(port, pin, mux, minval, maxval, joyid, axis) \
-		if ((axis == 0) && (joyid == id)) { joy_x = joyval12(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 4094), (int16_t)(maxval * 4094)); } \
-		if ((axis == 1) && (joyid == id)) { joy_y = joyval12(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 4094), (int16_t)(maxval * 4094)); }
-	ADC_MAPPING_TABLE(MAP)
-	#undef MAP
-	#endif
-
-	id = (id - ID_Joystick1) * NR_OF_EVENTS_PER_JOY;
-
-	for (i = 0; i < NUMBER_OF_INPUTS; i++)
+	for (uint8_t i = 0; i < s_nin; i++)
 	{
-		if (IsKeyDown(i))
+		if (!IsKeyDown(i))
+			continue;
+
+		uint8_t const key = (uint8_t)(GetKey(i) - base);
+
+		switch (key)
 		{
-			uint8_t key = GetKey(i) - id;
-			switch (key)
-			{
-			case J1_Left:
-				joy_x = -2047;
-				break;
-			case J1_Right:
-				joy_x = +2047;
-				break;
-			case J1_Up:
-				joy_y = -2047;
-				break;
-			case J1_Down:
-				joy_y = +2047;
-				break;
+		case J1_Left:  x = -127; break;
+		case J1_Right: x = +127; break;
+		case J1_Up:    y = -127; break;
+		case J1_Down:  y = +127; break;
 
-			case J1_Button1:
-			case J1_Button2:
-			case J1_Button3:
-			case J1_Button4:
-			case J1_Button5:
-			case J1_Button6:
-			case J1_Button7:
-			case J1_Button8:
-				joy_b |= JoyButtonBit(key);
-				break;
+		case J1_Button1: case J1_Button2: case J1_Button3: case J1_Button4:
+		case J1_Button5: case J1_Button6: case J1_Button7: case J1_Button8:
+			buttons |= JoyButtonBit(key);
+			break;
 
-			default:
-				break;
-			}
+		default:
+			break;
 		}
 	}
 
-	ReportBuffer[1] = ((uint16_t)joy_x & 0xFF);
-	ReportBuffer[2] = (((uint16_t)joy_y & 0x0F) << 4) | (((uint16_t)joy_x >> 8) & 0x0F);
-	ReportBuffer[3] = (((uint16_t)joy_y >> 4) & 0xFF);
-	ReportBuffer[4] = joy_b;
+	for (uint8_t k = 0; k < NUM_AXES_PER_JOY; k++)
+		s_axis_sent[joy][k] = s_axis_val[joy][k];
 
-	return 5;
+	s_report[0] = id;
+	s_report[1] = (uint8_t)x;
+	s_report[2] = (uint8_t)y;
+	s_report[3] = (uint8_t)z;
+	s_report[4] = (uint8_t)rz;
+	s_report[5] = buttons;
+
+	return JOYSTICK_REPORT_SIZE;
 }
-
-#endif
-
-#if (USE_ACCELGYRO)
-
-static uint8_t ReportAccelGyro()
-{
-	uint8_t id = ID_AccelGyro;
-
-	int8_t joy_x = 0;
-	int8_t joy_y = 0;
-	int8_t joy_z = 0;
-	int8_t joy_rx = 0;
-	int8_t joy_ry = 0;
-	int8_t joy_rz = 0;
-	uint8_t joy_b = 0;
-
-	ReportBuffer[0] = id;
-
-	#if defined(ENABLE_ANALOG_INPUT) && defined(ADC_MAPPING_TABLE)
-	#define MAP(port, pin, mux, minval, maxval, joyid, axis) \
-		if ((axis == 0) && (joyid == id)) { joy_x  = joyval8(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 254), (int16_t)(maxval * 254)); } \
-		if ((axis == 1) && (joyid == id)) { joy_y  = joyval8(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 254), (int16_t)(maxval * 254)); } \
-		if ((axis == 2) && (joyid == id)) { joy_z  = joyval8(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 254), (int16_t)(maxval * 254)); } \
-		if ((axis == 3) && (joyid == id)) { joy_rx = joyval8(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 254), (int16_t)(maxval * 254)); } \
-		if ((axis == 4) && (joyid == id)) { joy_ry = joyval8(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 254), (int16_t)(maxval * 254)); } \
-		if ((axis == 5) && (joyid == id)) { joy_rz = joyval8(ADC_getvalue(port##pin##_adcindex), (int16_t)(minval * 254), (int16_t)(maxval * 254)); }
-	ADC_MAPPING_TABLE(MAP)
-	#undef MAP
-	#endif
-
-	id = (id - ID_Joystick1) * NR_OF_EVENTS_PER_JOY;
-
-	for (uint8_t i = 0; i < NUMBER_OF_INPUTS; i++)
-	{
-		if (IsKeyDown(i))
-		{
-			uint8_t key = GetKey(i) - id;
-			switch (key)
-			{
-			case J1_Left:
-				joy_x = -127;
-				break;
-			case J1_Right:
-				joy_x = +127;
-				break;
-			case J1_Up:
-				joy_y = -127;
-				break;
-			case J1_Down:
-				joy_y = +127;
-				break;
-
-			case J1_Button1:
-			case J1_Button2:
-			case J1_Button3:
-			case J1_Button4:
-			case J1_Button5:
-			case J1_Button6:
-			case J1_Button7:
-			case J1_Button8:
-				joy_b |= JoyButtonBit(key);
-				break;
-
-			default:
-				break;
-			}
-		}
-	}
-
-	ReportBuffer[1] = joy_x;
-	ReportBuffer[2] = joy_y;
-	ReportBuffer[3] = joy_z;
-	ReportBuffer[4] = joy_rx;
-	ReportBuffer[5] = joy_ry;
-	ReportBuffer[6] = joy_rz;
-	ReportBuffer[7] = joy_b;
-
-	return 8;
-}
-
-#endif
-
-
-#if (USE_MOUSE != 0)
 
 static uint8_t ReportMouse(void)
 {
-	uint8_t i;
 	uint8_t buttons = 0;
 
-	for (i = 0; i < NUMBER_OF_INPUTS; i++)
+	for (uint8_t i = 0; i < s_nin; i++)
 	{
 		if (IsKeyDown(i))
 		{
-			uint8_t key = GetKey(i);
+			uint8_t const key = GetKey(i);
 
-			if (IsMouseButtonCode(key)) {
+			if (IsMouseButtonCode(key))
 				buttons |= MouseButtonBit(key);
-			}
 		}
 	}
 
-	ReportBuffer[0] = ID_Mouse;
-	ReportBuffer[1] = buttons;
-	ReportBuffer[2] = mouse_x_count;
-	ReportBuffer[3] = mouse_y_count;
-	mouse_x_count = 0;
-	mouse_y_count = 0;
+	s_report[0] = ID_Mouse;
+	s_report[1] = buttons;
+	s_report[2] = (uint8_t)s_mouse_x;
+	s_report[3] = (uint8_t)s_mouse_y;
+	s_mouse_x = 0;
+	s_mouse_y = 0;
 
-	return 4;
+	return MOUSE_REPORT_SIZE;
 }
-
-#endif
-
 
 static uint8_t BuildReport(uint8_t id)
 {
 	switch (id)
 	{
-	#if (USE_KEYBOARD != 0)
-	case ID_Keyboard:
-		return ReportKeyboard();
-	#endif
+	case ID_Keyboard:   return ReportKeyboard();
+	case ID_Consumer:   return ReportConsumer();
+	case ID_Mouse:      return ReportMouse();
 
-	#if (USE_CONSUMER != 0)
-	case ID_Consumer:
-		return ReportConsumer();
-	#endif
-
-	#if (NUM_JOYSTICKS >= 1)
-	case ID_Joystick4:
-	case ID_Joystick3:
-	case ID_Joystick2:
 	case ID_Joystick1:
-		return ReportJoystick(id);
-	#endif
-
-	#if (USE_ACCELGYRO)
-	case ID_AccelGyro:
-		return ReportAccelGyro(id);
-	#endif
-
-	#if (USE_MOUSE != 0)
-	case ID_Mouse:
-		return ReportMouse();
-	#endif
+	case ID_Joystick2:
+	case ID_Joystick3:
+	case ID_Joystick4:
+		if ((uint8_t)(id - ID_Joystick1) < NUM_JOYSTICKS)
+			return ReportJoystick(id);
+		break;
 
 	default:
 		break;
@@ -948,68 +791,30 @@ static uint8_t BuildReport(uint8_t id)
 
 uint8_t panel_get_report(uint8_t **ppdata)
 {
-	if (ppdata == NULL) {
+	if (ppdata == NULL)
 		return 0;
-	}
 
 	static uint16_t time_next_ms = 0;
 	uint16_t const time_curr_ms = clock_ms();
 
-	if (((int16_t)time_curr_ms - (int16_t)time_next_ms) < 0) {
+	if ((int16_t)(time_curr_ms - time_next_ms) < 0)
 		return 0;
-	}
 
-	time_next_ms = time_curr_ms + DELTA_TIME_PANEL_REPORT_MS;
+	time_next_ms = time_curr_ms + SCAN_INTERVAL_MS;
 
-	panel_ScanInput();
+	ScanInputs();
+	UpdateAnalogAxes();
 
 	uint8_t const id = NeedUpdate();
 
-	if (id == ID_Unknown) {
+	if (id == ID_Unknown)
 		return 0;
-	}
 
 	uint8_t const ndata = BuildReport(id);
-	*ppdata = ReportBuffer;
+	*ppdata = s_report;
 
 	return ndata;
 }
-
-
-#if defined(ENABLE_ANALOG_INPUT)
-
-// ADC Interrupt Routine
-
-ISR(ADC_vect)
-{
-	#if defined(ENABLE_PROFILING)
-	profile_start();
-	#endif
-
-	static int i = 0;
-
-	// get value
-
-	adc_values[i] = ADC;
-
-	// cycle
-
-	i -= 1;
-
-	if (i < 0) 
-		i += NUM_ADC_CHANNELS;
-
-	// set mux channel for the next conversion
-
-	ADC_setmux(adc_mux_table[i]);
-
-	// start new conversion
-
-	ADCSRA |= (1 << ADSC);
-}
-
-#endif
-
 
 
 #endif
