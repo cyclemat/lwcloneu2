@@ -50,6 +50,7 @@ HUDEV usbdev_create(LPCSTR devicepath)
 	// create context
 
 	usbdev_context_t * const h = (usbdev_context_t*)malloc(sizeof(usbdev_context_t));
+	HANDLE hdev = INVALID_HANDLE_VALUE;
 
 	if (h == NULL)
 		return NULL;
@@ -70,7 +71,7 @@ HUDEV usbdev_create(LPCSTR devicepath)
 
 	// open device
 
-	HANDLE hdev  = CreateFileA(
+	hdev = CreateFileA(
 		devicepath,
 		GENERIC_READ | GENERIC_WRITE,
 		FILE_SHARE_READ | FILE_SHARE_WRITE,

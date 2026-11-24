@@ -3,12 +3,14 @@
 #define LEDWIZ_H__INCLUDED
 
 
-#if defined(_MSC_VER)
+#if defined(_WIN32)
 
-#define LWZCALL __cdecl		// this is what the 'original' ledwiz.dll uses
+/* Aufrufkonventionen wie die originale ledwiz.dll (auf x64 ohne Wirkung) – für MSVC, MinGW und Clang.
+ * Calling conventions like the original ledwiz.dll (no effect on x64) – for MSVC, MinGW and Clang. */
+#define LWZCALL __cdecl
 #define LWZCALLBACK __stdcall
 
-#if (_MSC_VER >= 1600) // starting with VisualStudio 2010 stdint.h is available
+#if !defined(_MSC_VER) || (_MSC_VER >= 1600) // starting with VisualStudio 2010 stdint.h is available
 #include <stdint.h>
 #else
 typedef signed char int8_t;

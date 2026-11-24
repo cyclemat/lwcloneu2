@@ -111,7 +111,7 @@ static LRESULT CALLBACK MyWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-static BOOL ctrlhandler(DWORD fdwCtrlType)
+static BOOL WINAPI ctrlhandler(DWORD fdwCtrlType)
 { 
 	switch(fdwCtrlType)
 	{ 
@@ -138,10 +138,10 @@ static DWORD WINAPI MyThreadProc(LPVOID lpParameter)
 		return 0;
 	}
 
-	((void**)&g_main.fn.LWZ_SBA)[0]         = GetProcAddress(g_main.hdll, "LWZ_SBA");
-	((void**)&g_main.fn.LWZ_PBA)[0]         = GetProcAddress(g_main.hdll, "LWZ_PBA");
-	((void**)&g_main.fn.LWZ_REGISTER)[0]    = GetProcAddress(g_main.hdll, "LWZ_REGISTER");
-	((void**)&g_main.fn.LWZ_SET_NOTIFY)[0]  = GetProcAddress(g_main.hdll, "LWZ_SET_NOTIFY");
+	g_main.fn.LWZ_SBA         = reinterpret_cast<decltype(g_main.fn.LWZ_SBA)>(GetProcAddress(g_main.hdll, "LWZ_SBA"));
+	g_main.fn.LWZ_PBA         = reinterpret_cast<decltype(g_main.fn.LWZ_PBA)>(GetProcAddress(g_main.hdll, "LWZ_PBA"));
+	g_main.fn.LWZ_REGISTER    = reinterpret_cast<decltype(g_main.fn.LWZ_REGISTER)>(GetProcAddress(g_main.hdll, "LWZ_REGISTER"));
+	g_main.fn.LWZ_SET_NOTIFY  = reinterpret_cast<decltype(g_main.fn.LWZ_SET_NOTIFY)>(GetProcAddress(g_main.hdll, "LWZ_SET_NOTIFY"));
 
 	if (g_main.fn.LWZ_SBA == NULL ||
 		g_main.fn.LWZ_PBA == NULL ||
@@ -172,7 +172,7 @@ static DWORD WINAPI MyThreadProc(LPVOID lpParameter)
 
 	// set the console handler to handle the crtl-c and exit clicks
 
-	SetConsoleCtrlHandler((PHANDLER_ROUTINE)ctrlhandler, TRUE);
+	SetConsoleCtrlHandler(ctrlhandler, TRUE);
 
 	printf("waiting for device attachment or removal.\n");
 	printf("press <ctrl-c> to exit\n");

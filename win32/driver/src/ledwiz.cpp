@@ -179,7 +179,7 @@ void LWZ_PBA(LWZHANDLE hlwz, BYTE const *pbrightness_32bytes)
 	#endif
 }
 
-DWORD LWZ_RAWWRITE(LWZHANDLE hlwz, BYTE const *pdata, DWORD ndata)
+uint32_t LWZ_RAWWRITE(LWZHANDLE hlwz, uint8_t const *pdata, uint32_t ndata)
 {
 	AUTOLOCK(g_cs);
 
@@ -213,7 +213,7 @@ DWORD LWZ_RAWWRITE(LWZHANDLE hlwz, BYTE const *pdata, DWORD ndata)
 	return nbyteswritten;
 }
 
-DWORD LWZ_RAWREAD(LWZHANDLE hlwz, BYTE *pdata, DWORD ndata)
+uint32_t LWZ_RAWREAD(LWZHANDLE hlwz, uint8_t *pdata, uint32_t ndata)
 {
 	AUTOLOCK(g_cs);
 

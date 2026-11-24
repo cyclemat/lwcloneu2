@@ -43,7 +43,7 @@ struct {
 
 	LWZDEVICELIST devlist;
 
-} g_main = {0};
+} g_main = {};
 
 
 static void CALLBACK notify_cb(int32_t reason, LWZHANDLE hlwz)
@@ -147,11 +147,11 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	((void**)&g_main.fn.LWZ_SBA)[0]         = GetProcAddress(g_main.hdll, "LWZ_SBA");
-	((void**)&g_main.fn.LWZ_PBA)[0]         = GetProcAddress(g_main.hdll, "LWZ_PBA");
-	((void**)&g_main.fn.LWZ_RAWWRITE)[0]    = GetProcAddress(g_main.hdll, "LWZ_RAWWRITE");
-	((void**)&g_main.fn.LWZ_REGISTER)[0]    = GetProcAddress(g_main.hdll, "LWZ_REGISTER");
-	((void**)&g_main.fn.LWZ_SET_NOTIFY)[0]  = GetProcAddress(g_main.hdll, "LWZ_SET_NOTIFY");
+	g_main.fn.LWZ_SBA         = reinterpret_cast<decltype(g_main.fn.LWZ_SBA)>(GetProcAddress(g_main.hdll, "LWZ_SBA"));
+	g_main.fn.LWZ_PBA         = reinterpret_cast<decltype(g_main.fn.LWZ_PBA)>(GetProcAddress(g_main.hdll, "LWZ_PBA"));
+	g_main.fn.LWZ_RAWWRITE    = reinterpret_cast<decltype(g_main.fn.LWZ_RAWWRITE)>(GetProcAddress(g_main.hdll, "LWZ_RAWWRITE"));
+	g_main.fn.LWZ_REGISTER    = reinterpret_cast<decltype(g_main.fn.LWZ_REGISTER)>(GetProcAddress(g_main.hdll, "LWZ_REGISTER"));
+	g_main.fn.LWZ_SET_NOTIFY  = reinterpret_cast<decltype(g_main.fn.LWZ_SET_NOTIFY)>(GetProcAddress(g_main.hdll, "LWZ_SET_NOTIFY"));
 
 	if (g_main.fn.LWZ_SBA == NULL ||
 		g_main.fn.LWZ_PBA == NULL ||
