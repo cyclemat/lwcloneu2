@@ -28,6 +28,10 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
   Uno/Mega with ICSP header drawing, WinUSB via Zadig, Linux/macOS, back to Arduino, troubleshooting table), link to the
   configuration tool after success.
 - Webseite unter <https://cyclemat.github.io/lwcloneu2/> (GitHub Pages aus `docs/`). / Web page on GitHub Pages.
+- Ordner **`release/`** im Wurzelverzeichnis: alle gebauten Hex-Dateien + `manifest.json` (von `firmware/publish.sh`),
+  daraus bedient sich der Online-Flasher – lokal relativ, online über `raw.githubusercontent.com`, weil Pages nur
+  `docs/` ausliefert. / New **`release/`** folder with all built hex files + `manifest.json`; the web flasher loads
+  from there (relative locally, via `raw.githubusercontent.com` online).
 - **DOF steuert den Strip direkt** (Leonardo/Pro Micro): das Board meldet sich zusätzlich als virtueller COM-Port
   (CDC-ACM, kein Treiber ab Windows 10) und spricht dort das Protokoll des DOF-**TeensyStripControllers** mit einem
   Kanal (`firmware/strip_serial.c`, Befehle L/M/V/C/O/R/F, 'A'/'N'). In der Cabinet.xml genügt ein

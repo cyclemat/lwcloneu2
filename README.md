@@ -57,7 +57,7 @@ Ab Werk sind keine Eingänge und kein Strip eingerichtet (außer Breakout 32U2).
 
 1. **Firmware flashen** – am einfachsten mit dem [Online-Flasher](https://cyclemat.github.io/lwcloneu2/flash.html)
    in Edge/Chrome (Board wählen, Port wählen, fertig; Details im nächsten Abschnitt). Von Hand mit den `.hex`-Dateien
-   aus [`docs/firmware/`](docs/firmware/):
+   aus [`release/`](release/):
    - Leonardo/Micro: Reset drücken, dann innerhalb von ~8 s
      `avrdude -c avr109 -p atmega32u4 -P COMx -U flash:w:arduino_leonardo.hex:i`
    - Mega 2560: `avrdude -c wiring -p atmega2560 -P COMx -b 115200 -U flash:w:arduino_mega2560__m2560.hex:i`,
@@ -360,7 +360,7 @@ Benötigt `avr-gcc`, `avr-libc` (Linux: `apt install gcc-avr avr-libc`; Windows:
 cd firmware
 ./build.sh                # alle Boards ohne make (nur avr-gcc); Ergebnis: firmware/build/*.hex, Protokoll build.log
 ./build.sh leonardo       # ein Board (leonardo, promicro, breakout_32u2, mega2560, uno)
-./publish.sh              # Hex-Dateien + manifest.json nach docs/firmware/ (für Online-Flasher und Downloads)
+./publish.sh              # Hex-Dateien + manifest.json nach release/ (daraus bedient sich der Online-Flasher)
 make                      # alternativ mit den LUFA-Makefiles (Linux, make nötig); Ergebnis: <board>/<board>.hex
 ```
 
@@ -398,7 +398,7 @@ docs/               Webseite (GitHub Pages: https://cyclemat.github.io/lwcloneu2
   flash.html        Online-Flasher (Web Serial: AVR109/Caterina, STK500 v1/v2; WebUSB: Atmel DFU)
   config.html       Konfigurations-Tool (WebHID)
   style.css         gemeinsames Aussehen
-  firmware/         fertige .hex-Dateien + manifest.json (von firmware/publish.sh)
+release/            fertige .hex-Dateien + manifest.json (von firmware/publish.sh) – Quelle des Online-Flashers
 old/                unveränderter Original-Stand von cithraidt/lwcloneu2 (Aug. 2023), nur zum Nachschlagen
 ```
 
@@ -458,7 +458,7 @@ and no strip are configured (except on the Breakout 32U2).
 
 1. **Flash the firmware** – easiest with the [web flasher](https://cyclemat.github.io/lwcloneu2/flash.html) in
    Edge/Chrome (pick the board, pick the port, done; details in the next section). By hand with the `.hex` files
-   from [`docs/firmware/`](docs/firmware/):
+   from [`release/`](release/):
    - Leonardo/Micro: press reset, then within ~8 s
      `avrdude -c avr109 -p atmega32u4 -P COMx -U flash:w:arduino_leonardo.hex:i`
    - Mega 2560: `avrdude -c wiring -p atmega2560 -P COMx -b 115200 -U flash:w:arduino_mega2560__m2560.hex:i`, then
@@ -750,7 +750,7 @@ application. It needs Windows 10 or newer (Universal C Runtime). `testapp.exe` s
 
 Firmware: `avr-gcc` + `avr-libc` → `cd firmware && ./build.sh` (all boards, no make needed, output in
 `firmware/build/`) or `make` with the LUFA makefiles; `./publish.sh` copies the hex files and `manifest.json` to
-`docs/firmware/` for the web flasher.
+`release/`, which the web flasher downloads from.
 Windows: `cmake -S win32 -B build-x86 -A Win32 && cmake --build build-x86 --config Release` (MSVC) or with
 LLVM-MinGW/MinGW-w64 via `-G Ninja -DCMAKE_CXX_COMPILER=...`. Output in `win32/bin/<arch>/`.
 

@@ -1,9 +1,9 @@
 #!/bin/sh
-# Kopiert die gebauten Hex-Dateien in die Webseite (docs/firmware) und schreibt manifest.json für den Online-Flasher.
-# Copies the built hex files into the web page (docs/firmware) and writes manifest.json for the web flasher.
+# Kopiert die gebauten Hex-Dateien in den Ordner release/ und schreibt manifest.json – daraus bedient sich der Online-Flasher.
+# Copies the built hex files into release/ and writes manifest.json – the web flasher downloads from there.
 set -e
 cd "$(dirname "$0")"
-OUT=../docs/firmware
+OUT=../release
 mkdir -p "$OUT"
 MAJ=$(sed -n 's/^#define FW_VERSION_MAJOR *\([0-9]*\).*/\1/p' proto.h)
 MIN=$(sed -n 's/^#define FW_VERSION_MINOR *\([0-9]*\).*/\1/p' proto.h)
@@ -25,4 +25,4 @@ cp build/*.hex "$OUT"/
 	echo "  }"
 	echo "}"
 } > "$OUT/manifest.json"
-echo "docs/firmware aktualisiert / updated: $(ls "$OUT"/*.hex | wc -l) hex, Version $MAJ.$MIN"
+echo "release aktualisiert / updated: $(ls "$OUT"/*.hex | wc -l) hex, Version $MAJ.$MIN"

@@ -117,6 +117,12 @@ Stand: 24.11.2026
   Fix: `git rm --cached firmware/lufa` + `git add firmware/lufa`; `.gitignore` `build/` → `/build/` + `firmware/build/`,
   weil Git unter Windows (core.ignorecase) sonst `LUFA/Build/` (Make-Fragmente für lufa.mk) verschluckt. Lokal liegt noch
   `.git/modules/firmware/` als Rest des alten Submoduls – harmlos. Vor dem Fix war das Repo von außen nicht baubar.
+- **Ordner `release/` (Nutzerwunsch 24.11.2026):** alle gebauten Hex + manifest.json liegen im Wurzelverzeichnis
+  (`firmware/publish.sh` → `../release`), nicht mehr in `docs/firmware`. Der Flasher probiert `RELEASE_BASES`
+  (`../release/` lokal, dann `https://raw.githubusercontent.com/cyclemat/lwcloneu2/master/release/`), weil Pages nur
+  `docs/` ausliefert; raw liefert `Access-Control-Allow-Origin: *`. Download-Links von raw per Blob (download-Attribut
+  greift cross-origin nicht). Headless geprüft: lokal lädt Manifest 2.1; raw-Fallback erst nach Push prüfbar.
+  Außerdem 24.11.: alte VS-2008/2012-Projektdateien nur noch in `old/` (CMake ersetzt sie).
 - GitHub Pages für `docs/` ist seit 24.11.2026 aktiv (per `gh api … /pages`, Quelle master//docs; Nutzer-OK „ja“).
   https_enforced noch false – nach dem ersten Zertifikat per `gh api -X PUT repos/cyclemat/lwcloneu2/pages -F https_enforced=true` setzen.
 - Flasher-Anleitung (24.11.2026, Nutzerwunsch „online flasher mit anleitung“): Karte „So funktioniert es“ in

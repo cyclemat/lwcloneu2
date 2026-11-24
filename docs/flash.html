@@ -319,6 +319,8 @@ let manifest = null;
 let touchPending = null;   // nach 1200-Baud-Trick / after 1200 baud touch: {boardId, idx}
 const ownFiles = {};   // step index -> {name, text}
 let busy = false;
+const RELEASE_BASES = ['../release/', 'https://raw.githubusercontent.com/cyclemat/lwcloneu2/master/release/'];
+let releaseBase = RELEASE_BASES[0];
 
 function renderBadge() {
   const el = document.getElementById('fwbadge');
@@ -329,7 +331,19 @@ function renderDownloads() {
   if (!manifest) return;
   for (const [f, sz] of Object.entries(manifest.files)) {
     const li = document.createElement('li'); const a = document.createElement('a');
-    a.href = 'firmware/' + f; a.download = f; a.textContent = f; li.appendChild(a);
+    a.href = releaseBase + f; a.download = f; a.textContent = f; li.appendChild(a);
+    // Fremde Quelle (raw.githubusercontent.com): download-Attribut greift nicht → als Blob speichern.
+    // Cross-origin source: the download attribute is ignored → save as blob instead.
+    a.onclick = async (ev) => {
+      if (releaseBase.startsWith('http')) {
+        ev.preventDefault();
+        try {
+          const r = await fetch(releaseBase + f, { cache: 'no-cache' });
+          const u = URL.createObjectURL(await r.blob()); const d = document.createElement('a');
+          d.href = u; d.download = f; d.click(); setTimeout(() => URL.revokeObjectURL(u), 1000);
+        } catch (e) { window.open(releaseBase + f, '_blank'); }
+      }
+    };
     li.appendChild(document.createTextNode(` – ${(sz / 1024).toFixed(1)} KB`)); ul.appendChild(li);
   }
 }
@@ -619,7 +633,7 @@ async function getImage(boardId, step) {
   const own = ownFiles[boardId + step.idx];
   if (own) { log(`Datei / file: ${own.name}`); return parseHex(own.text); }
   if (!manifest || manifest.files[step.file] == null) throw new Error('Firmware-Datei nicht verfügbar / not available: ' + step.file);
-  const r = await fetch('firmware/' + step.file, { cache: 'no-cache' });
+  const r = await fetch(releaseBase + step.file, { cache: 'no-cache' });
   if (!r.ok) throw new Error(`Download ${step.file}: HTTP ${r.status}`);
   log(`Datei / file: ${step.file} (Firmware ${manifest.version})`);
   return parseHex(await r.text());
@@ -695,7 +709,15 @@ document.getElementById('hidbtn').onclick = async () => {
 /* ---------------------------------------------------------------- Start */
 (async () => {
   if (!navigator.serial && !navigator.usb) document.getElementById('unsupported').style.display = '';
-  try { const r = await fetch('firmware/manifest.json', { cache: 'no-cache' }); if (r.ok) manifest = await r.json(); } catch (e) {}
+  // Firmware-Quelle: Ordner release/ im Repo – lokal relativ (../release/), online über raw.githubusercontent.com,
+  // weil GitHub Pages nur docs/ ausliefert. / Firmware source: release/ folder of the repo – relative when served
+  // locally, via raw.githubusercontent.com online (GitHub Pages only serves docs/).
+  for (const base of RELEASE_BASES) {
+    try {
+      const r = await fetch(base + 'manifest.json', { cache: 'no-cache' });
+      if (r.ok) { manifest = await r.json(); releaseBase = base; log('Firmware-Quelle / source: ' + base); break; }
+    } catch (e) {}
+  }
   if (location.protocol === 'file:' && !manifest) log('Hinweis: lokal geöffnet – Hex-Dateien per „Eigene Hex-Datei“ wählen. / Opened locally – pick hex files via "own hex file".');
   applyLang();
 })();
