@@ -43,7 +43,10 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
 ### Verbessert / Improved
 - Repo-Aufbau: Webseite (Flasher, Konfigurations-Tool, Hex-Dateien) in `docs/`, gemeinsames `style.css`; der
   unveränderte Original-Stand von 2023 liegt zum Nachschlagen in `old/`. `tools/lwcconfig-web/` entfällt.
-  Repo layout: web page in `docs/`, unchanged upstream snapshot in `old/`; `tools/lwcconfig-web/` is gone.
+  Die alten Visual-Studio-Projektdateien (`win32/*/build/vs_2008`, `vs_2012`) gibt es nur noch in `old/`; gebaut wird
+  per CMake (`win32/CMakeLists.txt`).
+  Repo layout: web page in `docs/`, unchanged upstream snapshot in `old/`; `tools/lwcconfig-web/` is gone. The old
+  Visual Studio project files now live only in `old/`; the DLL and tools are built with CMake.
 - Die 32 LED-Wiz-Ausgänge sind wieder **reine GPIO-Ausgänge wie im Original** (`outputs.c` ohne Strip-Code);
   der Strip liest nur noch die Helligkeiten über `outputs_get_level()`.
   The 32 LED-Wiz outputs are plain GPIO outputs again like the original; the strip only reads their levels.
