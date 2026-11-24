@@ -1,0 +1,38 @@
+# Build-Ausgaben / build output
+build/
+build-*/
+win32/bin/
+win32/build/*/Debug/
+win32/build/*/Release/
+win32/build/*/x64/
+win32/build/*/*.user
+win32/build/*/*.suo
+win32/build/*/*.ncb
+win32/build/*/*.sdf
+win32/build/*/*.opensdf
+win32/build/*/ipch/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.log
+
+# Firmware-Build (avr-gcc / LUFA)
+firmware/**/obj/
+firmware/**/.dep/
+firmware/**/*.o
+firmware/**/*.d
+firmware/**/*.lst
+firmware/**/*.lss
+firmware/**/*.sym
+firmware/**/*.map
+firmware/**/*.elf
+firmware/**/*.eep
+firmware/**/*.bin
+firmware/**/*.hex
+
+# IDE
+.vs/
+.vscode/
+*.swp
