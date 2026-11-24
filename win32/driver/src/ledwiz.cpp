@@ -97,6 +97,7 @@ static HQUEUE queue_open(void);
 static size_t queue_push(HQUEUE hqueue, HUDEV hudev, uint8_t const *pdata, size_t ndata);
 static size_t queue_pop(HQUEUE hqueue, HUDEV *phudev, uint8_t *pbuffer, size_t nsize);
 static void queue_wait_empty(HQUEUE hqueue);
+static bool queue_start(struct queue_s *h);
 
 
 struct CAutoLockCS  // helper class to lock a critical section, and unlock it automatically
@@ -763,7 +764,7 @@ typedef struct {
 
 #define QUEUE_LENGTH   64   // the maximum bandwidth of the device is around 2 kByte/s so a lenght of 64 corresponds to one second
 
-typedef struct {
+typedef struct queue_s {
 	int rpos;
 	int wpos;
 	int level;
@@ -774,6 +775,7 @@ typedef struct {
 	HANDLE hwevent;
 	HANDLE heevent;
 	HANDLE hqevent;
+	HANDLE hsevent;     // set by the thread as soon as it runs
 	bool rblocked;
 	bool wblocked;
 	bool eblocked;
@@ -784,6 +786,8 @@ typedef struct {
 static DWORD WINAPI QueueThreadProc(LPVOID lpParameter)
 {
 	queue_t * const h = (queue_t*)lpParameter;
+
+	SetEvent(h->hsevent);
 
 	for (;;)
 	{
@@ -827,6 +831,12 @@ static void queue_close(HQUEUE hqueue, bool unload)
 			// instead we sync with the 'hqevent' that is set at the end of the thread routine
 
 			WaitForSingleObject(h->hqevent, INFINITE);
+
+			// The thread has signalled hqevent but may still execute its last instructions inside
+			// this DLL. Give it a moment to reach the OS thread-exit path (where it blocks on the
+			// loader lock we hold) before the DLL image is unmapped. Waiting without timeout would
+			// deadlock because of that very loader lock.
+			WaitForSingleObject(h->hthread, 250);
 			CloseHandle(h->hthread);
 			h->hthread = NULL;
 		}
@@ -862,6 +872,12 @@ static void queue_close(HQUEUE hqueue, bool unload)
 		h->heevent = NULL;
 	}
 
+	if (h->hsevent)
+	{
+		CloseHandle(h->hsevent);
+		h->hsevent = NULL;
+	}
+
 	DeleteCriticalSection(&h->cs);
 
 	free(h);
@@ -883,20 +899,20 @@ static HQUEUE queue_open(void)
 	h->hwevent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	h->heevent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	h->hqevent = CreateEvent(NULL, FALSE, FALSE, NULL);
+	h->hsevent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
 	if (h->hrevent == NULL ||
 		h->hwevent == NULL ||
 		h->heevent == NULL ||
-		h->hqevent == NULL )
+		h->hqevent == NULL ||
+		h->hsevent == NULL )
 	{
 		goto Failed;
 	}
 
-	h->hthread = CreateThread(NULL, 0, QueueThreadProc, (void*)h, 0, NULL);
-
-	if (h->hthread == NULL) {
-		goto Failed;
-	}
+	// The I/O thread is started lazily by the first API call (see queue_start), *not* here:
+	// queue_open runs inside DllMain while the loader lock is held, and a thread created there
+	// cannot start until LoadLibrary returns. Synchronising with it from DllMain deadlocks.
 
 	return h;
 
@@ -905,9 +921,32 @@ Failed:
 	return NULL;
 }
 
+// start the I/O thread if not yet running; must be called outside of DllMain
+static bool queue_start(queue_t *h)
+{
+	if (h->hthread != NULL) {
+		return true;
+	}
+
+	h->hthread = CreateThread(NULL, 0, QueueThreadProc, (void*)h, 0, NULL);
+
+	if (h->hthread == NULL) {
+		return false;
+	}
+
+	// wait until the thread really runs, so that a later unload can rely on the shutdown handshake
+	WaitForSingleObject(h->hsevent, INFINITE);
+
+	return true;
+}
+
 static void queue_wait_empty(HQUEUE hqueue)
 {
 	queue_t * const h = (queue_t*)hqueue;
+
+	if (h->hthread == NULL) {
+		return;    // nothing was ever queued
+	}
 
 	for (;;)
 	{
@@ -935,13 +974,17 @@ static size_t queue_push(HQUEUE hqueue, HUDEV hudev, uint8_t const *pdata, size_
 {
 	queue_t * const h = (queue_t*)hqueue;
 
-	if (pdata == NULL || ndata == 0 || ndata > sizeof(h->buf[0].data)) 
+	if (pdata == NULL || ndata == 0 || ndata > sizeof(h->buf[0].data))
 	{
 		// push empty chunk to signal shutdown
 
 		pdata = NULL;
 		ndata = 0;
 		hudev = NULL;
+	}
+	else if (!queue_start(h))
+	{
+		return 0;
 	}
 
 	for (;;)
