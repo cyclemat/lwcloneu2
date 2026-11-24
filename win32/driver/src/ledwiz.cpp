@@ -18,13 +18,13 @@
 
 #include <windows.h>
 #include <crtdbg.h>
-#include <Setupapi.h>
+#include <setupapi.h>
 
 extern "C" {
-#include <Hidsdi.h>
+#include <hidsdi.h>
 }
 
-#include <Dbt.h>
+#include <dbt.h>
 
 #define LWZ_DLL_EXPORT
 #include "../include/ledwiz.h"
@@ -253,6 +253,11 @@ void LWZ_SET_NOTIFY_EX(LWZNOTIFYPROC_EX notify_ex_cb, void * puser, LWZDEVICELIS
 
 	lwz_context_t * const h = g_plwz;
 
+	// clean up (if there was a LWZ_SET_NOTIFY(_EX) before)
+
+	lwz_freelist(h);
+	lwz_register(h, 0, NULL);
+
 	h->plist = plist;
 	h->cb.notify_ex = notify_ex_cb;
 	h->cb.puser = puser;
@@ -315,13 +320,20 @@ BOOL WINAPI DllMain(
 	}
 	else if (fdwReason == DLL_PROCESS_DETACH)
 	{
+		// lpvReserved != NULL: the process is terminating. All other threads are already gone,
+		// so we must not wait for the I/O thread (it would never signal) – just leave everything
+		// to the OS. Otherwise (FreeLibrary) shut down cleanly.
+		if (lpvReserved == NULL)
 		{
-			AUTOLOCK(g_cs);
+			{
+				AUTOLOCK(g_cs);
 
-			lwz_close(g_plwz);
+				lwz_close(g_plwz);
+				g_plwz = NULL;
+			}
+
+			DeleteCriticalSection(&g_cs);
 		}
-
-		DeleteCriticalSection(&g_cs);
 	}
 
 	return TRUE;
@@ -557,15 +569,15 @@ static void lwz_remove(lwz_context_t *h, int indx)
 	{
 		for (int i = 0; i < h->plist->numdevices; i++)
 		{
-			LWZHANDLE hlwz = indx + 1;
-
 			if (h->plist->handles[i] != hlwz)
 				continue;
 
+			// move the last entry into the gap and re-check this slot
 			h->plist->handles[i] = h->plist->handles[h->plist->numdevices - 1];
 			h->plist->handles[h->plist->numdevices - 1] = 0;
 
 			h->plist->numdevices -= 1;
+			i--;
 		}
 	}
 
@@ -842,6 +854,12 @@ static void queue_close(HQUEUE hqueue, bool unload)
 	{
 		CloseHandle(h->hqevent);
 		h->hqevent = NULL;
+	}
+
+	if (h->heevent)
+	{
+		CloseHandle(h->heevent);
+		h->heevent = NULL;
 	}
 
 	DeleteCriticalSection(&h->cs);

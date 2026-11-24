@@ -1,0 +1,62 @@
+# Baut Firmware (alle Boards) und Windows-DLL. Start nur von Hand (workflow_dispatch) oder bei einem Release-Tag.
+# Builds firmware (all boards) and the Windows DLL. Manual start (workflow_dispatch) or on a release tag.
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  firmware:
+    name: Firmware (avr-gcc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-avr avr-libc binutils-avr make
+      - name: Build all boards
+        run: make -C firmware all 2>&1 | tee build.log
+      - name: Collect hex files
+        run: |
+          mkdir -p out
+          find firmware -name '*.hex' -not -path '*/lufa/*' -exec cp {} out/ \;
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-hex
+          path: out/*.hex
+
+  windows:
+    name: ledwiz.dll (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86
+            cmake_arch: Win32
+          - arch: x64
+            cmake_arch: x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S win32 -B build-${{ matrix.arch }} -A ${{ matrix.cmake_arch }}
+      - name: Build
+        run: cmake --build build-${{ matrix.arch }} --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ledwiz-${{ matrix.arch }}
+          path: |
+            win32/bin/${{ matrix.arch }}/ledwiz.dll
+            win32/bin/${{ matrix.arch }}/testapp.exe
+            win32/bin/${{ matrix.arch }}/lwcconfig.exe
+
+  webtool:
+    name: Konfigurations-Tool
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lwcconfig-web
+          path: tools/lwcconfig-web/index.html

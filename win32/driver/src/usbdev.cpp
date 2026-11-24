@@ -161,7 +161,7 @@ size_t usbdev_read(HUDEV hudev, void *psrc, size_t ndata)
 	usbdev_context_t * const h = (usbdev_context_t*)hudev;
 
 	if (h == NULL)
-		return NULL;
+		return 0;
 
 	BYTE * pdata = (BYTE*)psrc;
 
@@ -229,9 +229,9 @@ size_t usbdev_read(HUDEV hudev, void *psrc, size_t ndata)
 size_t usbdev_write(HUDEV hudev, void const *pdst, size_t ndata)
 {
 	usbdev_context_t * const h = (usbdev_context_t*)hudev;
-	
+
 	if (h == NULL)
-		return NULL;
+		return 0;
 
 	BYTE const * pdata = (BYTE const *)pdst;
 
