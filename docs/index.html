@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LWCloneU2</title>
+<meta name="description" content="LWCloneU2 – LED-Wiz-Klon für Arduino-Boards: Firmware im Browser flashen und per USB einrichten. LED-Wiz clone for Arduino boards: flash and configure in the browser.">
+<link rel="stylesheet" href="style.css">
+<style>
+.hero { text-align: center; padding: 26px 0 10px; }
+.hero h2 { font-size: 26px; margin: 0 0 8px; font-weight: 700; }
+.hero p { color: var(--muted); max-width: 640px; margin: 0 auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.tile { display: block; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; transition: .15s; }
+.tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+.tile .num { display: inline-flex; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-weight: 700; align-items: center; justify-content: center; margin-bottom: 8px; }
+.tile h3 { margin: 0 0 6px; font-size: 16px; }
+.tile p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.tile .go { display: inline-block; margin-top: 12px; color: var(--blue); font-weight: 600; }
+ul.boards { columns: 2; padding-left: 18px; margin: 6px 0; font-size: 13.5px; }
+@media (max-width: 640px) { ul.boards { columns: 1; } }
+a { color: var(--blue); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LWCloneU2 <small data-i18n="subtitle">LED-Wiz-Klon für Arduino</small></h1>
+  <button id="langbtn" class="small" title="Sprache / language">EN</button>
+  <a class="btn" href="https://github.com/cyclemat/lwcloneu2" target="_blank" rel="noopener">GitHub</a>
+</header>
+
+<main>
+  <div class="hero">
+    <h2 data-i18n="h">Flashen und einrichten – direkt im Browser</h2>
+    <p data-i18n="p">LWCloneU2 macht aus einem Arduino einen LED-Wiz-kompatiblen Ausgabetreiber mit 32 Ausgängen, Tastern, Joystick-Achsen und WS2811/WS2812-Strip. Firmware und Pin-Belegung kommen ohne Installation über Microsoft Edge oder Google Chrome auf das Board.</p>
+  </div>
+
+  <div class="grid">
+    <a class="tile" href="flash.html">
+      <span class="num">1</span>
+      <h3 data-i18n="t1">Firmware flashen</h3>
+      <p data-i18n="t1p">Board wählen, Port oder DFU-Gerät wählen, fertig. Leonardo, Pro Micro, Uno, Mega 2560 und 32U2-Breakout – ohne avrdude oder FLIP.</p>
+      <span class="go" data-i18n="go1">Zum Flasher →</span>
+    </a>
+    <a class="tile" href="config.html">
+      <span class="num">2</span>
+      <h3 data-i18n="t2">Konfigurieren</h3>
+      <p data-i18n="t2p">Pins für Ausgänge, Taster und Achsen zuweisen, Joysticks kalibrieren, LED-Strip einrichten, Live-Anzeige – gespeichert im EEPROM des Boards.</p>
+      <span class="go" data-i18n="go2">Zum Konfigurations-Tool →</span>
+    </a>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="req">Voraussetzungen</h2>
+    <ul style="margin:6px 0; padding-left:18px; font-size:13.5px">
+      <li data-i18n="r1">Microsoft Edge oder Google Chrome ab Version 89 auf Windows, macOS oder Linux (Firefox/Safari können keine USB-Geräte ansprechen).</li>
+      <li data-i18n="r2">Ein unterstütztes Board am USB. Für DFU unter Windows einmalig der WinUSB-Treiber (Zadig), unter Linux udev-Regeln – Details stehen im Flasher und in der README.</li>
+      <li data-i18n="r3">Die Seiten laufen vollständig im Browser; es werden keine Daten an einen Server gesendet.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="boards">Unterstützte Boards</h2>
+    <ul class="boards">
+      <li>Arduino Leonardo (ATmega32U4)</li>
+      <li>Arduino Pro Micro / Micro (ATmega32U4)</li>
+      <li>Arduino Uno R3 (ATmega328P + ATmega16U2)</li>
+      <li>Arduino Uno R1/R2 (ATmega328P + ATmega8U2)</li>
+      <li>Arduino Mega 2560 (ATmega2560 + ATmega16U2)</li>
+      <li>Breakout-Board ATmega32U2</li>
+    </ul>
+    <div class="hint" data-i18n="beta">Stand: Beta – die Firmware 2.1 ist übersetzt und geprüft, aber noch nicht an echter Hardware getestet. Rückmeldungen bitte als GitHub-Issue.</div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="more">Mehr</h2>
+    <ul style="margin:6px 0; padding-left:18px; font-size:13.5px">
+      <li><a href="https://github.com/cyclemat/lwcloneu2#readme" target="_blank" rel="noopener" data-i18n="m1">README mit Anleitung, Verdrahtung und Protokoll</a></li>
+      <li><a href="https://github.com/cyclemat/lwcloneu2/blob/master/CHANGELOG.md" target="_blank" rel="noopener" data-i18n="m2">Changelog</a></li>
+      <li><a href="flash.html#dllist" data-i18n="m3">Hex-Dateien herunterladen (für avrdude / FLIP)</a></li>
+    </ul>
+  </div>
+</main>
+
+<script>
+'use strict';
+const I18N = {
+  de: {
+    subtitle:'LED-Wiz-Klon für Arduino', h:'Flashen und einrichten – direkt im Browser',
+    p:'LWCloneU2 macht aus einem Arduino einen LED-Wiz-kompatiblen Ausgabetreiber mit 32 Ausgängen, Tastern, Joystick-Achsen und WS2811/WS2812-Strip. Firmware und Pin-Belegung kommen ohne Installation über Microsoft Edge oder Google Chrome auf das Board.',
+    t1:'Firmware flashen', t1p:'Board wählen, Port oder DFU-Gerät wählen, fertig. Leonardo, Pro Micro, Uno, Mega 2560 und 32U2-Breakout – ohne avrdude oder FLIP.', go1:'Zum Flasher →',
+    t2:'Konfigurieren', t2p:'Pins für Ausgänge, Taster und Achsen zuweisen, Joysticks kalibrieren, LED-Strip einrichten, Live-Anzeige – gespeichert im EEPROM des Boards.', go2:'Zum Konfigurations-Tool →',
+    req:'Voraussetzungen',
+    r1:'Microsoft Edge oder Google Chrome ab Version 89 auf Windows, macOS oder Linux (Firefox/Safari können keine USB-Geräte ansprechen).',
+    r2:'Ein unterstütztes Board am USB. Für DFU unter Windows einmalig der WinUSB-Treiber (Zadig), unter Linux udev-Regeln – Details stehen im Flasher und in der README.',
+    r3:'Die Seiten laufen vollständig im Browser; es werden keine Daten an einen Server gesendet.',
+    boards:'Unterstützte Boards',
+    beta:'Stand: Beta – die Firmware 2.1 ist übersetzt und geprüft, aber noch nicht an echter Hardware getestet. Rückmeldungen bitte als GitHub-Issue.',
+    more:'Mehr', m1:'README mit Anleitung, Verdrahtung und Protokoll', m2:'Changelog', m3:'Hex-Dateien herunterladen (für avrdude / FLIP)',
+  },
+  en: {
+    subtitle:'LED-Wiz clone for Arduino', h:'Flash and configure – right in the browser',
+    p:'LWCloneU2 turns an Arduino into an LED-Wiz compatible output controller with 32 outputs, buttons, joystick axes and a WS2811/WS2812 strip. Firmware and pin assignment reach the board through Microsoft Edge or Google Chrome, no installation needed.',
+    t1:'Flash firmware', t1p:'Pick the board, pick the port or DFU device, done. Leonardo, Pro Micro, Uno, Mega 2560 and the 32U2 breakout – without avrdude or FLIP.', go1:'Open the flasher →',
+    t2:'Configure', t2p:'Assign pins for outputs, buttons and axes, calibrate joysticks, set up the LED strip, live view – stored in the board’s EEPROM.', go2:'Open the configuration tool →',
+    req:'Requirements',
+    r1:'Microsoft Edge or Google Chrome version 89 or later on Windows, macOS or Linux (Firefox/Safari cannot access USB devices).',
+    r2:'A supported board on USB. For DFU on Windows the WinUSB driver (Zadig) once, on Linux udev rules – details are in the flasher and the README.',
+    r3:'The pages run entirely in the browser; no data is sent to any server.',
+    boards:'Supported boards',
+    beta:'Status: beta – firmware 2.1 compiles and is reviewed but has not yet been tested on real hardware. Please report back via GitHub issues.',
+    more:'More', m1:'README with guide, wiring and protocol', m2:'Changelog', m3:'Download hex files (for avrdude / FLIP)',
+  }
+};
+let lang = 'de';
+try { lang = (localStorage.getItem('lwc_lang') || (navigator.language || 'de').slice(0, 2)) === 'en' ? 'en' : 'de'; } catch (e) {}
+const t = k => I18N[lang][k] ?? I18N.de[k] ?? k;
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.getElementById('langbtn').textContent = lang === 'de' ? 'EN' : 'DE';
+}
+document.getElementById('langbtn').onclick = () => { lang = lang === 'de' ? 'en' : 'de'; try { localStorage.setItem('lwc_lang', lang); } catch (e) {} applyLang(); };
+applyLang();
+</script>
+</body>
+</html>

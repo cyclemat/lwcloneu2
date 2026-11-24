@@ -9,16 +9,20 @@ Gedacht für MAME-/Pinball-Cabinets: ein Board für Beleuchtung und Bedienelemen
 Firmware **v2.1** – Fork von [cithraidt/lwcloneu2](https://github.com/cithraidt/lwcloneu2) (GPLv2).
 Stand: **Beta** – übersetzt und geprüft, aber noch nicht an echter Hardware getestet.
 
+**Webseite: <https://cyclemat.github.io/lwcloneu2/>** – Firmware im Browser flashen und das Board einrichten
+(Microsoft Edge oder Google Chrome, nichts zu installieren).
+
 ## Inhalt
 
 1. [Was kann es](#was-kann-es)
 2. [Unterstützte Boards](#unterstützte-boards)
 3. [Schnellstart](#schnellstart)
-4. [Das Konfigurations-Tool](#das-konfigurations-tool) – Verbinden, Ausgänge, Eingänge, Achsen, LED-Strip, Gerät, Fehlersuche
-5. [ledwiz.dll](#ledwizdll)
-6. [Selbst bauen](#selbst-bauen)
-7. [Aufbau des Codes](#aufbau-des-codes)
-8. [Lizenz](#lizenz)
+4. [Der Online-Flasher](#der-online-flasher) – Firmware im Browser auf das Board bringen
+5. [Das Konfigurations-Tool](#das-konfigurations-tool) – Verbinden, Ausgänge, Eingänge, Achsen, LED-Strip, Gerät, Fehlersuche
+6. [ledwiz.dll](#ledwizdll)
+7. [Selbst bauen](#selbst-bauen)
+8. [Aufbau des Codes](#aufbau-des-codes)
+9. [Lizenz](#lizenz)
 
 ## Was kann es
 
@@ -50,28 +54,81 @@ Ab Werk sind keine Eingänge und kein Strip eingerichtet (außer Breakout 32U2).
 
 ## Schnellstart
 
-1. **Firmware flashen** (fertige `.hex` aus den Releases/GitHub-Actions-Artefakten oder selbst bauen, siehe unten).
+1. **Firmware flashen** – am einfachsten mit dem [Online-Flasher](https://cyclemat.github.io/lwcloneu2/flash.html)
+   in Edge/Chrome (Board wählen, Port wählen, fertig; Details im nächsten Abschnitt). Von Hand mit den `.hex`-Dateien
+   aus [`docs/firmware/`](docs/firmware/):
    - Leonardo/Micro: Reset drücken, dann innerhalb von ~8 s
      `avrdude -c avr109 -p atmega32u4 -P COMx -U flash:w:arduino_leonardo.hex:i`
    - Mega 2560: `avrdude -c wiring -p atmega2560 -P COMx -b 115200 -U flash:w:arduino_mega2560__m2560.hex:i`,
      danach den 16U2 per DFU (Atmel FLIP / `dfu-programmer`) mit `arduino_mega2560__m16u2.hex`.
-   - Uno: `avrdude -c arduino -p m328p -P COMx -U flash:w:arduino_uno__m328.hex:i`, den 8U2/16U2 per DFU mit
-     `arduino_uno__m8u2.hex`.
-2. **Konfigurieren:** `tools/lwcconfig-web/index.html` in Microsoft Edge oder Google Chrome öffnen, „Verbinden“,
-   Pins zuweisen, „Speichern“. Ausführlich im nächsten Abschnitt.
+   - Uno: `avrdude -c arduino -p m328p -P COMx -U flash:w:arduino_uno__m328.hex:i`, danach den USB-Chip per DFU:
+     Uno R3 (16U2) mit `arduino_uno__m16u2.hex`, Uno R1/R2 (8U2) mit `arduino_uno__m8u2.hex`.
+2. **Konfigurieren:** [Konfigurations-Tool](https://cyclemat.github.io/lwcloneu2/config.html) in Microsoft Edge
+   oder Google Chrome öffnen, „Verbinden“, Pins zuweisen, „Speichern“. Ausführlich weiter unten.
 3. **LED-Wiz-Software:** `ledwiz.dll` (x86 für 32-Bit-Programme, x64 für 64-Bit) neben die Anwendung legen oder
    deren mitgelieferte `ledwiz.dll` ersetzen. Die LED-Wiz-ID (1–16) wird im Tool unter „Gerät“ gesetzt.
 
+## Der Online-Flasher
+
+<https://cyclemat.github.io/lwcloneu2/flash.html> – flasht die Firmware direkt aus dem Browser, ohne avrdude,
+Atmel FLIP oder Arduino-IDE. Die Seite benutzt **Web Serial** (für die Arduino-Bootloader) und **WebUSB** (für die
+DFU-Bootloader der USB-Chips); sie liegt im Ordner [`docs/`](docs/) und kann auch lokal geöffnet werden.
+**Stand Beta:** die Abläufe sind nach den Protokollen von avrdude, Caterina, optiboot, stk500boot und dfu-programmer
+umgesetzt, aber noch nicht an echter Hardware getestet – Rückmeldungen bitte als Issue mit dem Protokolltext der Seite.
+
+### Voraussetzungen
+
+- **Browser:** Microsoft Edge oder Google Chrome ab Version 89 (Desktop). Firefox und Safari können kein Web Serial /
+  WebUSB.
+- **DFU unter Windows** (Uno/Mega-USB-Chip, Breakout 32U2): der Browser braucht den **WinUSB-Treiber** für das
+  DFU-Gerät – einmalig mit [Zadig](https://zadig.akeo.ie/): „Options → List All Devices“, „ATmega16U2 DFU“ (o. ä.)
+  wählen, Treiber „WinUSB“ installieren. Atmel FLIP funktioniert danach nicht mehr, bis man den Treiber zurücksetzt.
+- **Linux:** udev-Regel für die Bootloader, z. B. in `/etc/udev/rules.d/60-lwcloneu2.rules`:
+  `SUBSYSTEM=="usb", ATTRS{idVendor}=="03eb", MODE="0666"` (Atmel DFU) und
+  `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="fafa", MODE="0666"` (LWCloneU2 selbst); der Benutzer gehört zur Gruppe
+  `dialout` (serielle Ports).
+- **macOS:** nichts weiter nötig.
+
+### So geht es
+
+1. **Board wählen** – Leonardo, Pro Micro/Micro, Uno R3 (16U2), Uno R1/R2 (8U2), Mega 2560 oder Breakout 32U2. Beim
+   Uno steht der USB-Chip auf dem kleinen Chip neben der USB-Buchse („MEGA16U2“ oder „MEGA8U2“). Die Seite zeigt die
+   nötigen Schritte für genau dieses Board.
+2. **Leonardo / Pro Micro** (ein Chip, Bootloader Caterina): „Port wählen und flashen“, im Dialog den Arduino-Port
+   wählen. Läuft noch ein Arduino-Sketch, startet die Seite den Bootloader über den 1200-Baud-Trick; danach erscheint
+   der Port-Dialog erneut – jetzt das „… bootloader“-Gerät wählen (der Bootloader läuft nur 8 s). Läuft bereits
+   LWCloneU2, zuerst unten „Bootloader per USB-HID starten“ (oder Reset doppelt drücken) und dann innerhalb von 8 s
+   den Port wählen.
+3. **Uno / Mega 2560** (zwei Chips, Reihenfolge wichtig):
+   1. **Hauptchip** (328P / 2560) über den USB-Seriell-Wandler des Boards: „Port wählen und flashen“. Die Seite
+      setzt das Board per DTR zurück und spricht optiboot (STK500 v1) bzw. den Mega-Bootloader (STK500 v2) an. Der
+      USB-Chip muss dafür noch seine Original-Firmware haben.
+   2. **USB-Chip** (16U2 / 8U2) per DFU: am 6-Pin-ICSP-Header neben der USB-Buchse die beiden Pins **RESET und GND**
+      (zur Platinenkante hin) kurz brücken → das Board meldet sich als „ATmega16U2 DFU“. „DFU-Gerät wählen und
+      flashen“. Danach gibt es keinen seriellen Port mehr – das Board ist jetzt ein LWCloneU2.
+4. **Breakout 32U2:** mit gedrückter HWB-Taste anschließen (DFU-Modus), dann „DFU-Gerät wählen und flashen“.
+5. Nach dem Flashen startet das Board neu und meldet sich als LWCloneU2 (HID). Weiter mit dem Konfigurations-Tool.
+
+Die Seite löscht, schreibt und **prüft** den Flash (Verify) und bricht bei falschem Chip (Signatur bzw. DFU-PID) ab.
+Unter „Eigene Hex-Datei“ lässt sich eine selbst gebaute oder fremde Firmware flashen – zum Beispiel die
+Original-USB-Seriell-Firmware des Uno/Mega aus der Arduino-IDE (`hardware/arduino/avr/firmwares/atmegaxxu2/`), um
+das Board wieder in einen normalen Arduino zu verwandeln.
+
+**Fehlersuche:** „kein Port gewählt“ – Dialog abgebrochen oder der Port fehlt (Treiber, Kabel nur zum Laden?).
+„keine Antwort vom Bootloader“ – falsches Board gewählt, Bootloader-Fenster verpasst (Leonardo: 8 s), oder ein
+anderes Programm (Arduino-IDE, serieller Monitor) hält den Port. „falscher Chip“ – Board-Auswahl prüfen (Uno R3 vs.
+R1/R2). DFU „Gerät nicht gefunden / Zugriff verweigert“ – Windows: WinUSB-Treiber per Zadig; Linux: udev-Regel.
+
 ## Das Konfigurations-Tool
 
-Das Tool ist eine einzelne HTML-Datei: [`tools/lwcconfig-web/index.html`](tools/lwcconfig-web/index.html).
-Sie läuft komplett im Browser und spricht per **WebHID** direkt mit dem Board – über dieselbe USB-HID-Verbindung,
+Das Tool läuft unter <https://cyclemat.github.io/lwcloneu2/config.html> (oder lokal: [`docs/config.html`](docs/config.html)).
+Es läuft komplett im Browser und spricht per **WebHID** direkt mit dem Board – über dieselbe USB-HID-Verbindung,
 die auch die LED-Wiz-Software benutzt. Kein COM-Port, kein Treiber, keine Installation, nichts geht ins Internet.
 
 ### Voraussetzungen
 
 - **Browser:** Microsoft Edge oder Google Chrome ab Version 89 (auch Opera, Brave). Firefox und Safari können kein
-  WebHID. Die Datei darf lokal geöffnet werden (Doppelklick), auch ohne Webserver.
+  WebHID. Der Ordner `docs/` darf auch lokal geöffnet werden (Doppelklick auf `config.html`), ohne Webserver.
 - **Firmware v2.1 oder neuer** auf dem Board. Mit älterer Firmware meldet das Tool „Firmware zu alt“.
 - **Windows:** nichts weiter nötig. **Linux:** der Benutzer braucht Schreibrecht auf das `hidraw`-Gerät, z. B. per
   udev-Regel `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="fafa", MODE="0666"`. **macOS:** funktioniert ohne Vorbereitung.
@@ -269,6 +326,7 @@ Benötigt `avr-gcc`, `avr-libc` (Linux: `apt install gcc-avr avr-libc`; Windows:
 cd firmware
 ./build.sh                # alle Boards ohne make (nur avr-gcc); Ergebnis: firmware/build/*.hex, Protokoll build.log
 ./build.sh leonardo       # ein Board (leonardo, promicro, breakout_32u2, mega2560, uno)
+./publish.sh              # Hex-Dateien + manifest.json nach docs/firmware/ (für Online-Flasher und Downloads)
 make                      # alternativ mit den LUFA-Makefiles (Linux, make nötig); Ergebnis: <board>/<board>.hex
 ```
 
@@ -300,7 +358,13 @@ firmware/
 win32/
   driver/           ledwiz.dll (ledwiz.cpp, usbdev.cpp)
   testapp/, lwcconfig/
-tools/lwcconfig-web/index.html   Konfigurations-Tool (WebHID)
+docs/               Webseite (GitHub Pages: https://cyclemat.github.io/lwcloneu2/)
+  index.html        Startseite
+  flash.html        Online-Flasher (Web Serial: AVR109/Caterina, STK500 v1/v2; WebUSB: Atmel DFU)
+  config.html       Konfigurations-Tool (WebHID)
+  style.css         gemeinsames Aussehen
+  firmware/         fertige .hex-Dateien + manifest.json (von firmware/publish.sh)
+old/                unveränderter Original-Stand von cithraidt/lwcloneu2 (Aug. 2023), nur zum Nachschlagen
 ```
 
 Ein neues Board anlegen: Ordner mit `hwconfig.h` (Timer 0 = Soft-PWM, Timer 1 = Uhr, ADC, UART), `pinmap.h`
@@ -322,6 +386,9 @@ Made for MAME/pinball cabinets: one board for lighting and controls, configured 
 
 Firmware **v2.1** – fork of [cithraidt/lwcloneu2](https://github.com/cithraidt/lwcloneu2) (GPLv2).
 Status: **beta** – compiled and reviewed, not yet tested on real hardware.
+
+**Web page: <https://cyclemat.github.io/lwcloneu2/>** – flash the firmware and set up the board in the browser
+(Microsoft Edge or Google Chrome, nothing to install).
 
 ## Features
 
@@ -353,28 +420,78 @@ and no strip are configured (except on the Breakout 32U2).
 
 ## Quick start
 
-1. **Flash the firmware** (`.hex` from the releases/GitHub Actions artifacts or build it yourself, see below).
+1. **Flash the firmware** – easiest with the [web flasher](https://cyclemat.github.io/lwcloneu2/flash.html) in
+   Edge/Chrome (pick the board, pick the port, done; details in the next section). By hand with the `.hex` files
+   from [`docs/firmware/`](docs/firmware/):
    - Leonardo/Micro: press reset, then within ~8 s
      `avrdude -c avr109 -p atmega32u4 -P COMx -U flash:w:arduino_leonardo.hex:i`
    - Mega 2560: `avrdude -c wiring -p atmega2560 -P COMx -b 115200 -U flash:w:arduino_mega2560__m2560.hex:i`, then
      the 16U2 via DFU (Atmel FLIP / `dfu-programmer`) with `arduino_mega2560__m16u2.hex`.
-   - Uno: `avrdude -c arduino -p m328p -P COMx -U flash:w:arduino_uno__m328.hex:i`, the 8U2/16U2 via DFU with
-     `arduino_uno__m8u2.hex`.
-2. **Configure:** open `tools/lwcconfig-web/index.html` in Microsoft Edge or Google Chrome, "Connect", assign pins,
-   "Save". Details in the next section.
+   - Uno: `avrdude -c arduino -p m328p -P COMx -U flash:w:arduino_uno__m328.hex:i`, then the USB chip via DFU:
+     Uno R3 (16U2) with `arduino_uno__m16u2.hex`, Uno R1/R2 (8U2) with `arduino_uno__m8u2.hex`.
+2. **Configure:** open the [configuration tool](https://cyclemat.github.io/lwcloneu2/config.html) in Microsoft Edge
+   or Google Chrome, "Connect", assign pins, "Save". Details further below.
 3. **LED-Wiz software:** put `ledwiz.dll` (x86 for 32-bit programs, x64 for 64-bit) next to the application or
    replace its bundled `ledwiz.dll`. The LED-Wiz id (1–16) is set in the tool under "Device".
 
+## The web flasher
+
+<https://cyclemat.github.io/lwcloneu2/flash.html> – flashes the firmware straight from the browser, without avrdude,
+Atmel FLIP or the Arduino IDE. The page uses **Web Serial** (for the Arduino bootloaders) and **WebUSB** (for the DFU
+bootloaders of the USB chips); it lives in [`docs/`](docs/) and can also be opened locally.
+**Beta:** the procedures follow the protocols of avrdude, Caterina, optiboot, stk500boot and dfu-programmer but have
+not been tested on real hardware yet – please report back via an issue including the page's log text.
+
+### Requirements
+
+- **Browser:** Microsoft Edge or Google Chrome 89 or newer (desktop). Firefox and Safari have no Web Serial / WebUSB.
+- **DFU on Windows** (Uno/Mega USB chip, breakout 32U2): the browser needs the **WinUSB driver** for the DFU device –
+  once, with [Zadig](https://zadig.akeo.ie/): "Options → List All Devices", pick "ATmega16U2 DFU" (or similar),
+  install the "WinUSB" driver. Atmel FLIP will no longer work until you revert the driver.
+- **Linux:** udev rules for the bootloaders, e.g. in `/etc/udev/rules.d/60-lwcloneu2.rules`:
+  `SUBSYSTEM=="usb", ATTRS{idVendor}=="03eb", MODE="0666"` (Atmel DFU) and
+  `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="fafa", MODE="0666"` (LWCloneU2 itself); the user is in the `dialout` group
+  (serial ports).
+- **macOS:** nothing else needed.
+
+### Step by step
+
+1. **Pick the board** – Leonardo, Pro Micro/Micro, Uno R3 (16U2), Uno R1/R2 (8U2), Mega 2560 or breakout 32U2. On
+   the Uno the USB chip is printed on the small chip next to the USB socket ("MEGA16U2" or "MEGA8U2"). The page shows
+   the steps for exactly that board.
+2. **Leonardo / Pro Micro** (one chip, Caterina bootloader): "Choose port and flash", pick the Arduino port. If an
+   Arduino sketch is still running, the page starts the bootloader with the 1200 baud touch; the port dialog then
+   appears again – now pick the "… bootloader" device (the bootloader only runs for 8 s). If LWCloneU2 is already
+   running, first use "Start the bootloader via USB HID" below (or double-tap reset) and pick the port within 8 s.
+3. **Uno / Mega 2560** (two chips, order matters):
+   1. **Main chip** (328P / 2560) through the board's USB-serial converter: "Choose port and flash". The page resets
+      the board via DTR and talks to optiboot (STK500 v1) or the Mega bootloader (STK500 v2). The USB chip must still
+      have its original firmware for this.
+   2. **USB chip** (16U2 / 8U2) via DFU: on the 6-pin ICSP header next to the USB socket, briefly bridge the two pins
+      **RESET and GND** (towards the board edge) → the board shows up as "ATmega16U2 DFU". "Choose DFU device and
+      flash". After that there is no serial port any more – the board is now an LWCloneU2.
+4. **Breakout 32U2:** connect with the HWB button held (DFU mode), then "Choose DFU device and flash".
+5. After flashing the board restarts and shows up as LWCloneU2 (HID). Continue with the configuration tool.
+
+The page erases, writes and **verifies** the flash and aborts on a wrong chip (signature or DFU PID). "Own hex file"
+flashes a self-built or third-party firmware – for example the original USB-serial firmware of the Uno/Mega from the
+Arduino IDE (`hardware/arduino/avr/firmwares/atmegaxxu2/`) to turn the board back into a normal Arduino.
+
+**Troubleshooting:** "no port chosen" – dialog cancelled or the port is missing (driver, charge-only cable?).
+"no reply from bootloader" – wrong board selected, bootloader window missed (Leonardo: 8 s), or another program
+(Arduino IDE, serial monitor) holds the port. "wrong chip" – check the board selection (Uno R3 vs. R1/R2). DFU
+"device not found / access denied" – Windows: WinUSB driver via Zadig; Linux: udev rule.
+
 ## The configuration tool
 
-The tool is a single HTML file: [`tools/lwcconfig-web/index.html`](tools/lwcconfig-web/index.html). It runs entirely
-in the browser and talks to the board via **WebHID** – over the same USB HID connection the LED-Wiz software uses.
-No COM port, no driver, no installation, nothing goes to the internet.
+The tool runs at <https://cyclemat.github.io/lwcloneu2/config.html> (or locally: [`docs/config.html`](docs/config.html)).
+It runs entirely in the browser and talks to the board via **WebHID** – over the same USB HID connection the LED-Wiz
+software uses. No COM port, no driver, no installation, nothing goes to the internet.
 
 ### Requirements
 
 - **Browser:** Microsoft Edge or Google Chrome 89 or newer (Opera and Brave work too). Firefox and Safari have no
-  WebHID. The file can be opened locally (double click), no web server needed.
+  WebHID. The `docs/` folder can also be opened locally (double-click `config.html`), no web server needed.
 - **Firmware v2.1 or newer** on the board. With older firmware the tool reports "Firmware too old".
 - **Windows:** nothing else needed. **Linux:** the user needs write access to the `hidraw` device, e.g. a udev rule
   `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="fafa", MODE="0666"`. **macOS:** works out of the box.
@@ -563,13 +680,15 @@ application. It needs Windows 10 or newer (Universal C Runtime). `testapp.exe` s
 ## Building
 
 Firmware: `avr-gcc` + `avr-libc` → `cd firmware && ./build.sh` (all boards, no make needed, output in
-`firmware/build/`) or `make` with the LUFA makefiles.
+`firmware/build/`) or `make` with the LUFA makefiles; `./publish.sh` copies the hex files and `manifest.json` to
+`docs/firmware/` for the web flasher.
 Windows: `cmake -S win32 -B build-x86 -A Win32 && cmake --build build-x86 --config Release` (MSVC) or with
 LLVM-MinGW/MinGW-w64 via `-G Ninja -DCMAKE_CXX_COMPILER=...`. Output in `win32/bin/<arch>/`.
 
 ## Code layout
 
-See the tree above. To add a board: a folder with `hwconfig.h` (timer 0 = soft PWM, timer 1 = clock, ADC, UART),
+See the tree above (`docs/` = web page with flasher and configuration tool, `old/` = unchanged upstream snapshot
+from August 2023 for reference). To add a board: a folder with `hwconfig.h` (timer 0 = soft PWM, timer 1 = clock, ADC, UART),
 `pinmap.h` (`BOARD_ID`, `BOARD_PIN_TABLE`, `WS2812_MAX_PIXELS`, factory defaults), `devconfig.h`, `makefile`; add
 the board id to `pins.h` and the pin names to the tool (`BOARDS`). Protocol: [`firmware/proto.h`](firmware/proto.h),
 data layout: [`firmware/config.h`](firmware/config.h).

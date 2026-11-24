@@ -113,12 +113,22 @@ static void hardware_init(void)
 	MCUSR &= ~(1 << WDRF);
 	wdt_disable();
 
-	#if defined(BOOTLOADER_START_ADDR)
+	#if defined(BOOTLOADER_MAGIC_ADDR)
+	// Caterina (32u4) hat die Anfrage selbst erledigt (Schlüssel im RAM, s. hardware_restart) und läuft 8 s;
+	// kommen wir hier an, ist er abgelaufen – normal weiterstarten, nicht erneut springen.
+	// Caterina (32u4) handled the request itself (key in RAM, see hardware_restart) and ran for 8 s;
+	// if we get here it timed out – start normally, do not jump again.
+	g_resetstate = 0;
+	(void)mcusr;
+	#elif defined(BOOTLOADER_START_ADDR)
 	// if that was a reset due to watchdog timeout that we issued, call the bootloader
-	if ((mcusr & (1 << WDRF)) &&
+	// (ein per BOOTRST gestarteter Bootloader läuft vorher und löscht MCUSR evtl.)
+	// (a bootloader started via BOOTRST runs first and may have cleared MCUSR)
+	if (((mcusr & (1 << WDRF)) || mcusr == 0) &&
 	    (g_resetstate == RESETSTATE_BOOTLOADER))
 	{
 		g_resetstate = 0;
+		MCUSR = 0;   // Atmel-DFU erkennt den Sprung aus der Anwendung an leeren Reset-Flags / DFU treats empty flags as a jump from the app
 		void (*bootloader)(void) = (void*)(BOOTLOADER_START_ADDR);
 		bootloader();
 	}
@@ -407,6 +417,11 @@ static void hardware_restart(bool enter_bootloader)
 
 	// set persistant variable, so we know that we issued the reset
 	g_resetstate = enter_bootloader ? RESETSTATE_BOOTLOADER : 0;
+
+	#if defined(BOOTLOADER_MAGIC_ADDR)
+	// Caterina (32u4): Schlüssel setzen, damit der Bootloader nach dem Reset wartet / key so Caterina waits
+	*(volatile uint16_t*)BOOTLOADER_MAGIC_ADDR = enter_bootloader ? BOOTLOADER_MAGIC_VALUE : 0;
+	#endif
 
 	for (;;) {;}
 }

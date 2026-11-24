@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LWCloneU2 Flasher</title>
+<meta name="description" content="LWCloneU2-Firmware direkt aus dem Browser auf Arduino Leonardo, Pro Micro, Uno, Mega 2560 oder den 32U2-Breakout flashen (Web Serial / WebUSB, Edge/Chrome). Flash LWCloneU2 firmware from the browser.">
+<link rel="stylesheet" href="style.css">
+<style>
+.steps { counter-reset: step; }
+.step { position: relative; padding-left: 44px; margin: 14px 0; }
+.step::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.step h3 { margin: 4px 0 6px; font-size: 14.5px; font-weight: 650; }
+.step p, .step ul { margin: 6px 0; }
+.step ul { padding-left: 18px; }
+.chip { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.progress { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 10px 0 4px; }
+.progress b { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+.progress.ok b { background: var(--green); }
+.progress.err b { background: var(--red); }
+#log { min-height: 180px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+.warnbox { border-left: 3px solid var(--accent); padding: 6px 10px; background: var(--bg2); border-radius: 8px; margin: 8px 0; font-size: 13px; }
+.filebox { font-size: 12.5px; color: var(--muted); }
+input[type=file] { font: inherit; font-size: 12.5px; max-width: 100%; }
+a { color: var(--blue); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><a href="./" style="color:inherit;text-decoration:none">LWCloneU2</a> <small data-i18n="subtitle">Firmware flashen</small></h1>
+  <span id="fwbadge" class="badge">Firmware …</span>
+  <button id="langbtn" class="small" title="Sprache / language">EN</button>
+  <a class="btn" href="config.html" data-i18n="toconfig">Konfigurations-Tool →</a>
+</header>
+
+<main>
+  <div id="unsupported" class="card unsupported" style="display:none">
+    <strong data-i18n="nosupport">Dieser Browser unterstützt Web Serial / WebUSB nicht.</strong>
+    <div class="hint" data-i18n="nosupport2">Bitte Microsoft Edge oder Google Chrome (ab Version 89, Desktop) verwenden. Firefox und Safari können keine USB-Geräte ansprechen.</div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="board">1. Board wählen</h2>
+    <div class="row">
+      <select id="board">
+        <option value="leonardo">Arduino Leonardo (ATmega32U4)</option>
+        <option value="promicro">Arduino Pro Micro / Micro (ATmega32U4)</option>
+        <option value="uno16">Arduino Uno R3 (ATmega328P + ATmega16U2)</option>
+        <option value="uno8">Arduino Uno R1/R2 (ATmega328P + ATmega8U2)</option>
+        <option value="mega">Arduino Mega 2560 (ATmega2560 + ATmega16U2)</option>
+        <option value="breakout">Breakout-Board ATmega32U2</option>
+      </select>
+      <span class="hint grow" id="boardhint"></span>
+    </div>
+    <div class="warnbox" id="boardwarn" style="display:none"></div>
+  </div>
+
+  <div id="steps"></div>
+
+  <div class="card">
+    <h2 data-i18n="hidtitle">Bootloader per USB-HID starten (wenn LWCloneU2 schon läuft)</h2>
+    <div class="hint" data-i18n="hidhint">Läuft auf dem Board bereits eine LWCloneU2-Firmware, meldet es sich nur als HID-Gerät und hat keinen seriellen Port. Dieser Knopf schickt den Befehl „Bootloader“ (wie im Konfigurations-Tool): Leonardo/Pro Micro erscheinen dann 8 Sekunden lang als serieller Port, 8U2/16U2/32U2 als DFU-Gerät.</div>
+    <div class="row" style="margin-top:8px">
+      <button id="hidbtn" data-i18n="hidbtn">Gerät wählen und Bootloader starten</button>
+      <span id="hidstatus" class="status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="logtitle">Protokoll</h2>
+    <div class="progress" id="progress"><b></b></div>
+    <div id="logstatus" class="status">–</div>
+    <textarea id="log" readonly></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="clearlog" class="small" data-i18n="clearlog">Leeren</button>
+      <span class="hint grow" data-i18n="loghint">Bei Problemen diesen Text in einen GitHub-Issue kopieren.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="dltitle">Hex-Dateien zum Herunterladen</h2>
+    <div class="hint" data-i18n="dlhint">Für avrdude, Atmel FLIP, dfu-programmer oder einen ISP-Programmer. Befehle stehen in der README.</div>
+    <ul id="dllist" style="margin:8px 0 0; padding-left:18px; font-size:13.5px"></ul>
+  </div>
+</main>
+
+<script>
+'use strict';
+/* ---------------------------------------------------------------- i18n */
+const I18N = {
+  de: {
+    subtitle:'Firmware flashen', toconfig:'Konfigurations-Tool →',
+    nosupport:'Dieser Browser unterstützt Web Serial / WebUSB nicht.',
+    nosupport2:'Bitte Microsoft Edge oder Google Chrome (ab Version 89, Desktop) verwenden. Firefox und Safari können keine USB-Geräte ansprechen.',
+    board:'1. Board wählen',
+    hidtitle:'Bootloader per USB-HID starten (wenn LWCloneU2 schon läuft)',
+    hidhint:'Läuft auf dem Board bereits eine LWCloneU2-Firmware, meldet es sich nur als HID-Gerät und hat keinen seriellen Port. Dieser Knopf schickt den Befehl „Bootloader“ (wie im Konfigurations-Tool): Leonardo/Pro Micro erscheinen dann 8 Sekunden lang als serieller Port, 8U2/16U2/32U2 als DFU-Gerät.',
+    hidbtn:'Gerät wählen und Bootloader starten', logtitle:'Protokoll', clearlog:'Leeren',
+    loghint:'Bei Problemen diesen Text in einen GitHub-Issue kopieren.',
+    dltitle:'Hex-Dateien zum Herunterladen', dlhint:'Für avrdude, Atmel FLIP, dfu-programmer oder einen ISP-Programmer. Befehle stehen in der README.',
+    fw:'Firmware {v} vom {d}', fwfail:'manifest.json nicht ladbar – nur eigene Hex-Dateien möglich',
+    ownhex:'Eigene Hex-Datei statt der mitgelieferten:', usingown:'eigene Datei: {f}', usingbundled:'mitgeliefert: {f} ({k} KB)',
+    flash_serial:'Port wählen und flashen', flash_dfu:'DFU-Gerät wählen und flashen', flash_boot:'Bootloader-Port wählen und flashen',
+    hid_ok:'Befehl gesendet – das Gerät startet jetzt den Bootloader.', hid_none:'Kein LWCloneU2 gefunden oder Dialog abgebrochen.',
+    hid_hint32u4:'Jetzt innerhalb von 8 Sekunden oben „Port wählen und flashen“ klicken!',
+    st_idle:'–', st_running:'läuft …', st_ok:'Fertig – Firmware geschrieben und geprüft.', st_err:'Fehlgeschlagen: {e}',
+    st_touch:'Board wurde neu gestartet. Jetzt den Bootloader-Port wählen (erscheint als neuer Port, 8 s Zeit).',
+    // Schrittexte
+    role_usb:'USB-Chip', role_main:'Hauptchip',
+    ht_caterina:'Board anschließen und in den Bootloader bringen',
+    hb_caterina:'<ul><li><b>Neues Board oder Arduino-Sketch darauf:</b> einfach weiter – der Flasher startet den Bootloader selbst über den seriellen Port (1200-Baud-Trick). Erscheint danach noch einmal der Port-Dialog, das Gerät „… bootloader“ wählen.</li><li><b>LWCloneU2 läuft schon darauf:</b> unten „Bootloader per USB-HID starten“ – oder die Reset-Taste zweimal kurz drücken.</li><li>Der Bootloader (Caterina) läuft nur <b>8 Sekunden</b>; in dieser Zeit den Port wählen.</li></ul>',
+    ht_flash:'Flashen',
+    hb_serial:'<p>„Port wählen und flashen“ klicken und im Dialog den Port des Boards wählen. Das Board wird gelöscht, beschrieben und geprüft (ca. 10–20 s). Danach startet es neu und meldet sich als <b>LWCloneU2</b> (HID).</p>',
+    ht_uno_main:'Hauptchip flashen (über den USB-Seriell-Wandler des Boards)',
+    hb_uno_main:'<p>Der USB-Chip muss noch seine <b>Original-Firmware</b> (USB-Seriell) haben – also <b>zuerst diesen Schritt</b>, dann den USB-Chip. Board anschließen, „Port wählen und flashen“, den Arduino-Port wählen. Der Flasher setzt das Board per DTR zurück und spricht den Arduino-Bootloader an.</p>',
+    ht_dfu:'USB-Chip per DFU flashen',
+    hb_dfu_arduino:'<p>Den USB-Chip in den <b>DFU-Modus</b> bringen: am kleinen 6-Pin-ICSP-Header neben der USB-Buchse die beiden Pins <b>RESET und GND</b> (die zwei Pins zur Platinenkante hin) kurz mit einem Draht brücken. Das Board meldet sich dann als „ATmega16U2 DFU“ bzw. „ATmega8U2 DFU“.</p><p>Dann „DFU-Gerät wählen und flashen“. Nach dem Flashen startet der Chip neu – <b>ab jetzt gibt es keinen seriellen Port mehr</b>, das Board ist ein LWCloneU2.</p>',
+    hb_dfu_breakout:'<p>Board mit gedrückter HWB-Taste anschließen (oder Reset bei gedrückter HWB-Taste) – es meldet sich als „ATmega32U2 DFU“. Läuft schon LWCloneU2, geht es auch über den HID-Knopf unten. Dann „DFU-Gerät wählen und flashen“.</p>',
+    dfu_driver:'<b>Treiber:</b> Unter <b>Windows</b> braucht der Browser für DFU den WinUSB-Treiber: <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a> starten, „Options → List All Devices“, das DFU-Gerät wählen, Treiber „WinUSB“ installieren (einmalig). Unter <b>Linux</b> eine udev-Regel für VID 03eb anlegen (siehe README). macOS: nichts nötig.',
+    back_arduino:'Zurück zum normalen Arduino: den USB-Chip per DFU wieder mit der Original-Firmware flashen (Datei <span class="chip">{f}</span> aus der Arduino-IDE, Ordner <span class="chip">hardware/arduino/avr/firmwares/atmegaxxu2/</span>; hier über „Eigene Hex-Datei“).',
+    boardhint_leonardo:'Ein Chip, Bootloader Caterina (seriell).', boardhint_uno:'Zwei Chips: zuerst der 328P (seriell), dann der USB-Chip (DFU).',
+    boardhint_mega:'Zwei Chips: zuerst der 2560 (seriell), dann der 16U2 (DFU).', boardhint_breakout:'Ein Chip, Atmel-DFU-Bootloader (WebUSB).',
+    warn_uno:'Welcher USB-Chip? Steht auf dem kleinen Chip neben der USB-Buchse: „MEGA16U2“ → Uno R3, „MEGA8U2“ → Uno R1/R2. Die falsche Datei startet nach dem Flashen nicht in den Bootloader zurück.',
+    warn_order:'Reihenfolge beachten: Nach dem USB-Chip gibt es keinen seriellen Port mehr. Soll der Hauptchip später nochmal geflasht werden, braucht es einen ISP-Programmer oder den Rückweg über die Original-USB-Firmware.',
+  },
+  en: {
+    subtitle:'Flash firmware', toconfig:'Configuration tool →',
+    nosupport:'This browser does not support Web Serial / WebUSB.',
+    nosupport2:'Please use Microsoft Edge or Google Chrome (version 89 or later, desktop). Firefox and Safari cannot access USB devices.',
+    board:'1. Choose your board',
+    hidtitle:'Start the bootloader via USB HID (if LWCloneU2 is already running)',
+    hidhint:'If the board already runs an LWCloneU2 firmware it only shows up as an HID device and has no serial port. This button sends the “bootloader” command (same as in the configuration tool): Leonardo/Pro Micro then appear as a serial port for 8 seconds, 8U2/16U2/32U2 as a DFU device.',
+    hidbtn:'Choose device and start bootloader', logtitle:'Log', clearlog:'Clear',
+    loghint:'If something fails, paste this text into a GitHub issue.',
+    dltitle:'Hex files for download', dlhint:'For avrdude, Atmel FLIP, dfu-programmer or an ISP programmer. Commands are in the README.',
+    fw:'Firmware {v} from {d}', fwfail:'manifest.json not loadable – only your own hex files are possible',
+    ownhex:'Use your own hex file instead of the bundled one:', usingown:'own file: {f}', usingbundled:'bundled: {f} ({k} KB)',
+    flash_serial:'Choose port and flash', flash_dfu:'Choose DFU device and flash', flash_boot:'Choose bootloader port and flash',
+    hid_ok:'Command sent – the device is starting its bootloader.', hid_none:'No LWCloneU2 found or dialog cancelled.',
+    hid_hint32u4:'Now click “Choose port and flash” above within 8 seconds!',
+    st_idle:'–', st_running:'running …', st_ok:'Done – firmware written and verified.', st_err:'Failed: {e}',
+    st_touch:'Board was reset. Now choose the bootloader port (it appears as a new port, 8 s).',
+    role_usb:'USB chip', role_main:'main chip',
+    ht_caterina:'Connect the board and enter the bootloader',
+    hb_caterina:'<ul><li><b>New board or an Arduino sketch on it:</b> just continue – the flasher starts the bootloader itself via the serial port (1200 baud touch). If the port dialog appears again, pick the “… bootloader” device.</li><li><b>LWCloneU2 already running:</b> use “Start the bootloader via USB HID” below – or press reset twice quickly.</li><li>The bootloader (Caterina) only runs for <b>8 seconds</b>; choose the port within that time.</li></ul>',
+    ht_flash:'Flash',
+    hb_serial:'<p>Click “Choose port and flash” and pick the board’s port in the dialog. The board is erased, written and verified (about 10–20 s). It then restarts and shows up as <b>LWCloneU2</b> (HID).</p>',
+    ht_uno_main:'Flash the main chip (through the board’s USB-serial converter)',
+    hb_uno_main:'<p>The USB chip must still have its <b>original firmware</b> (USB-serial) – so <b>do this step first</b>, then the USB chip. Connect the board, click “Choose port and flash”, pick the Arduino port. The flasher resets the board via DTR and talks to the Arduino bootloader.</p>',
+    ht_dfu:'Flash the USB chip via DFU',
+    hb_dfu_arduino:'<p>Put the USB chip into <b>DFU mode</b>: on the small 6-pin ICSP header next to the USB socket, briefly bridge the two pins <b>RESET and GND</b> (the two pins towards the board edge) with a wire. The board then shows up as “ATmega16U2 DFU” or “ATmega8U2 DFU”.</p><p>Then click “Choose DFU device and flash”. After flashing the chip restarts – <b>from now on there is no serial port</b>, the board is an LWCloneU2.</p>',
+    hb_dfu_breakout:'<p>Connect the board with the HWB button held (or reset while holding HWB) – it shows up as “ATmega32U2 DFU”. If LWCloneU2 is already running, the HID button below works too. Then click “Choose DFU device and flash”.</p>',
+    dfu_driver:'<b>Driver:</b> on <b>Windows</b> the browser needs the WinUSB driver for DFU: run <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a>, “Options → List All Devices”, pick the DFU device, install the “WinUSB” driver (once). On <b>Linux</b> add a udev rule for VID 03eb (see README). macOS: nothing needed.',
+    back_arduino:'Back to a normal Arduino: flash the USB chip via DFU with its original firmware again (file <span class="chip">{f}</span> from the Arduino IDE, folder <span class="chip">hardware/arduino/avr/firmwares/atmegaxxu2/</span>; use “own hex file” here).',
+    boardhint_leonardo:'One chip, Caterina bootloader (serial).', boardhint_uno:'Two chips: first the 328P (serial), then the USB chip (DFU).',
+    boardhint_mega:'Two chips: first the 2560 (serial), then the 16U2 (DFU).', boardhint_breakout:'One chip, Atmel DFU bootloader (WebUSB).',
+    warn_uno:'Which USB chip? It is printed on the small chip next to the USB socket: “MEGA16U2” → Uno R3, “MEGA8U2” → Uno R1/R2. The wrong file will not return to the bootloader after flashing.',
+    warn_order:'Mind the order: after the USB chip there is no serial port any more. To flash the main chip again later you need an ISP programmer or the way back via the original USB firmware.',
+  }
+};
+let lang = 'de';
+try { lang = (localStorage.getItem('lwc_lang') || (navigator.language || 'de').slice(0, 2)) === 'en' ? 'en' : 'de'; } catch (e) {}
+const t = (k, vars) => { let s = I18N[lang][k] ?? I18N.de[k] ?? k; if (vars) for (const [n, v] of Object.entries(vars)) s = s.split('{' + n + '}').join(v); return s; };
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.getElementById('langbtn').textContent = lang === 'de' ? 'EN' : 'DE';
+  renderBoard(); renderDownloads(); renderBadge();
+}
+document.getElementById('langbtn').onclick = () => { lang = lang === 'de' ? 'en' : 'de'; try { localStorage.setItem('lwc_lang', lang); } catch (e) {} applyLang(); };
+
+/* ---------------------------------------------------------------- Boards */
+const SIG = { atmega32u4:[0x1E,0x95,0x87], atmega328p:[0x1E,0x95,0x0F], atmega2560:[0x1E,0x98,0x01], atmega16u2:[0x1E,0x94,0x89], atmega8u2:[0x1E,0x93,0x89], atmega32u2:[0x1E,0x95,0x8A] };
+const DFU_PID = { 0x2FEE:'atmega8u2', 0x2FEF:'atmega16u2', 0x2FF0:'atmega32u2', 0x2FF4:'atmega32u4', 0x2FF3:'atmega16u4', 0x2FFA:'at90usb162', 0x2FF7:'at90usb82' };
+const FLASH = { atmega32u4:{size:32768, page:128, boot:4096}, atmega328p:{size:32768, page:128, boot:512}, atmega2560:{size:262144, page:256, boot:8192},
+                atmega16u2:{size:16384, page:128, boot:4096}, atmega8u2:{size:8192, page:128, boot:2048}, atmega32u2:{size:32768, page:128, boot:4096} };
+const BOARDS = {
+  leonardo: { hint:'boardhint_leonardo', steps:[ {kind:'text', h:'ht_caterina', b:'hb_caterina'}, {kind:'flash', h:'ht_flash', b:'hb_serial', method:'avr109', mcu:'atmega32u4', file:'arduino_leonardo.hex', role:'role_usb'} ] },
+  promicro: { hint:'boardhint_leonardo', steps:[ {kind:'text', h:'ht_caterina', b:'hb_caterina'}, {kind:'flash', h:'ht_flash', b:'hb_serial', method:'avr109', mcu:'atmega32u4', file:'arduino_promicro.hex', role:'role_usb'} ] },
+  uno16:    { hint:'boardhint_uno', warn:['warn_uno','warn_order'], back:'UNO-dfu_and_usbserial_combined.hex', steps:[ {kind:'flash', h:'ht_uno_main', b:'hb_uno_main', method:'stk500v1', mcu:'atmega328p', file:'arduino_uno__m328.hex', role:'role_main'}, {kind:'flash', h:'ht_dfu', b:'hb_dfu_arduino', driver:true, method:'dfu', mcu:'atmega16u2', file:'arduino_uno__m16u2.hex', role:'role_usb'} ] },
+  uno8:     { hint:'boardhint_uno', warn:['warn_uno','warn_order'], back:'UNO-dfu_and_usbserial_combined.hex', steps:[ {kind:'flash', h:'ht_uno_main', b:'hb_uno_main', method:'stk500v1', mcu:'atmega328p', file:'arduino_uno__m328.hex', role:'role_main'}, {kind:'flash', h:'ht_dfu', b:'hb_dfu_arduino', driver:true, method:'dfu', mcu:'atmega8u2', file:'arduino_uno__m8u2.hex', role:'role_usb'} ] },
+  mega:     { hint:'boardhint_mega', warn:['warn_order'], back:'MEGA2560-dfu_and_usbserial_combined.hex', steps:[ {kind:'flash', h:'ht_uno_main', b:'hb_uno_main', method:'stk500v2', mcu:'atmega2560', file:'arduino_mega2560__m2560.hex', role:'role_main'}, {kind:'flash', h:'ht_dfu', b:'hb_dfu_arduino', driver:true, method:'dfu', mcu:'atmega16u2', file:'arduino_mega2560__m16u2.hex', role:'role_usb'} ] },
+  breakout: { hint:'boardhint_breakout', steps:[ {kind:'flash', h:'ht_dfu', b:'hb_dfu_breakout', driver:true, method:'dfu', mcu:'atmega32u2', file:'breakout_32u2.hex', role:'role_usb'} ] },
+};
+let manifest = null;
+let touchPending = null;   // nach 1200-Baud-Trick / after 1200 baud touch: {boardId, idx}
+const ownFiles = {};   // step index -> {name, text}
+let busy = false;
+
+function renderBadge() {
+  const el = document.getElementById('fwbadge');
+  el.textContent = manifest ? t('fw', { v: manifest.version, d: manifest.date }) : t('fwfail');
+}
+function renderDownloads() {
+  const ul = document.getElementById('dllist'); ul.innerHTML = '';
+  if (!manifest) return;
+  for (const [f, sz] of Object.entries(manifest.files)) {
+    const li = document.createElement('li'); const a = document.createElement('a');
+    a.href = 'firmware/' + f; a.download = f; a.textContent = f; li.appendChild(a);
+    li.appendChild(document.createTextNode(` – ${(sz / 1024).toFixed(1)} KB`)); ul.appendChild(li);
+  }
+}
+function renderBoard() {
+  const id = document.getElementById('board').value; const b = BOARDS[id];
+  document.getElementById('boardhint').textContent = t(b.hint);
+  const w = document.getElementById('boardwarn');
+  w.style.display = b.warn ? '' : 'none'; w.innerHTML = (b.warn || []).map(k => '<div>' + t(k) + '</div>').join('');
+  const root = document.getElementById('steps'); root.innerHTML = '';
+  const card = document.createElement('div'); card.className = 'card steps';
+  b.steps.forEach((s, i) => {
+    const d = document.createElement('div'); d.className = 'step';
+    let html = `<h3>${t(s.h)}</h3>${t(s.b)}`;
+    if (s.kind === 'flash') {
+      const own = ownFiles[id + i];
+      const bundled = manifest && manifest.files[s.file] != null;
+      const fileinfo = own ? t('usingown', { f: own.name }) : bundled ? t('usingbundled', { f: s.file, k: (manifest.files[s.file] / 1024).toFixed(1) }) : s.file;
+      if (s.driver) html += `<div class="warnbox">${t('dfu_driver')}</div>`;
+      html += `<div class="row" style="margin-top:8px"><span class="badge">${t(s.role)}: <span class="chip">${s.mcu}</span></span>
+        <button class="primary" data-step="${i}" ${busy ? 'disabled' : ''}>${t(s.method === 'dfu' ? 'flash_dfu' : (touchPending && touchPending.boardId === id && touchPending.idx === i) ? 'flash_boot' : 'flash_serial')}</button>
+        <span class="filebox grow">${fileinfo}</span></div>
+        <div class="row filebox" style="margin-top:6px"><span>${t('ownhex')}</span><input type="file" accept=".hex,.ihx,.eep" data-own="${i}"></div>`;
+    }
+    d.innerHTML = html; card.appendChild(d);
+  });
+  if (b.back) { const p = document.createElement('div'); p.className = 'hint'; p.style.marginTop = '10px'; p.innerHTML = t('back_arduino', { f: b.back }); card.appendChild(p); }
+  root.appendChild(card);
+  card.querySelectorAll('button[data-step]').forEach(btn => btn.onclick = () => startFlash(id, +btn.dataset.step));
+  card.querySelectorAll('input[data-own]').forEach(inp => inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) { delete ownFiles[id + inp.dataset.own]; renderBoard(); return; }
+    ownFiles[id + inp.dataset.own] = { name: f.name, text: await f.text() }; renderBoard();
+  });
+}
+document.getElementById('board').onchange = renderBoard;
+
+/* ---------------------------------------------------------------- Log */
+const logEl = document.getElementById('log');
+function log(s) { logEl.value += s + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+function setProgress(frac, cls) { const p = document.getElementById('progress'); p.className = 'progress ' + (cls || ''); p.firstElementChild.style.width = Math.round(frac * 100) + '%'; }
+function setStatus(s, cls) { const el = document.getElementById('logstatus'); el.textContent = s; el.className = 'status ' + (cls || ''); }
+document.getElementById('clearlog').onclick = () => { logEl.value = ''; };
+const hex2 = b => b.toString(16).padStart(2, '0').toUpperCase();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------------------------------------------------------------- Intel HEX */
+function parseHex(text) {
+  const chunks = []; let ext = 0, max = 0, n = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim(); n++; if (!line) continue;
+    if (line[0] !== ':' || line.length < 11) throw new Error(`HEX: Zeile ${n} ungültig / invalid line`);
+    const bytes = []; for (let i = 1; i < line.length; i += 2) bytes.push(parseInt(line.substr(i, 2), 16));
+    if (bytes.some(Number.isNaN)) throw new Error(`HEX: Zeile ${n} ungültig / invalid line`);
+    if (bytes.reduce((a, b) => (a + b) & 255, 0) !== 0) throw new Error(`HEX: Prüfsumme Zeile ${n} / checksum line ${n}`);
+    const len = bytes[0], addr = (bytes[1] << 8) | bytes[2], type = bytes[3], data = bytes.slice(4, 4 + len);
+    if (type === 0) { const a = ext + addr; chunks.push({ a, data }); max = Math.max(max, a + len); }
+    else if (type === 1) break;
+    else if (type === 2) ext = ((data[0] << 8) | data[1]) << 4;
+    else if (type === 4) ext = ((data[0] << 8) | data[1]) << 16;
+  }
+  if (!max) throw new Error('HEX: keine Daten / no data');
+  const img = new Uint8Array(max).fill(0xFF); for (const c of chunks) img.set(c.data, c.a);
+  return img;
+}
+function padTo(img, page) { const n = Math.ceil(img.length / page) * page; const out = new Uint8Array(n).fill(0xFF); out.set(img); return out; }
+function same(a, b) { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; }
+
+/* ---------------------------------------------------------------- Serial helper */
+class Serial {
+  constructor(port) { this.port = port; this.buf = []; this.reader = null; }
+  async open(baud) { await this.port.open({ baudRate: baud, bufferSize: 4096 }); this.buf = []; this._pump(); }
+  async _pump() {
+    try { this.reader = this.port.readable.getReader();
+      for (;;) { const { value, done } = await this.reader.read(); if (done) break; if (value) for (const b of value) this.buf.push(b); }
+    } catch (e) {} finally { try { this.reader && this.reader.releaseLock(); } catch (e) {} this.reader = null; }
+  }
+  async close() { try { this.reader && await this.reader.cancel(); } catch (e) {} await sleep(30); try { await this.port.close(); } catch (e) {} }
+  async write(bytes) { const w = this.port.writable.getWriter(); try { await w.write(new Uint8Array(bytes)); } finally { w.releaseLock(); } }
+  flush() { this.buf.length = 0; }
+  async read(n, timeout = 1000) {
+    const end = performance.now() + timeout;
+    while (this.buf.length < n) { if (performance.now() > end) throw new Error(`Timeout (${this.buf.length}/${n} Byte)`); await sleep(4); }
+    return this.buf.splice(0, n);
+  }
+  async setSignals(s) { try { await this.port.setSignals(s); } catch (e) { log('setSignals: ' + e.message); } }
+}
+async function dtrReset(ser) {
+  await ser.setSignals({ dataTerminalReady: false, requestToSend: false }); await sleep(100);
+  await ser.setSignals({ dataTerminalReady: true, requestToSend: true }); await sleep(50);
+  await ser.setSignals({ dataTerminalReady: false, requestToSend: false }); await sleep(250);
+  ser.flush();
+}
+
+/* ---------------------------------------------------------------- AVR109 (Caterina) */
+async function avr109Probe(ser) {
+  ser.flush(); await ser.write([0x1B]); await sleep(30); ser.flush();     // ESC = sync
+  await ser.write(['S'.charCodeAt(0)]);
+  const id = await ser.read(7, 400);
+  return String.fromCharCode(...id);
+}
+async function avr109Flash(ser, img, mcu) {
+  const F = FLASH[mcu]; const sig = SIG[mcu];
+  const ok = async (what, timeout = 1500) => { const r = await ser.read(1, timeout); if (r[0] !== 0x0D) throw new Error(`${what}: Antwort / reply ${hex2(r[0])}`); };
+  await ser.write(['V'.charCodeAt(0)]); const v = await ser.read(2, 500); log(`Bootloader-Version ${String.fromCharCode(...v)}`);
+  await ser.write(['s'.charCodeAt(0)]); const s = await ser.read(3, 500); const got = [s[2], s[1], s[0]];
+  log(`Signatur ${got.map(hex2).join(' ')} (${mcu}: ${sig.map(hex2).join(' ')})`);
+  if (!same(got, sig)) throw new Error('falscher Chip / wrong chip: ' + got.map(hex2).join(' '));
+  if (img.length > F.size - F.boot) throw new Error(`Firmware zu groß / too large: ${img.length} > ${F.size - F.boot}`);
+  await ser.write(['P'.charCodeAt(0)]); await ok('P');
+  log('Löschen / erasing …'); await ser.write(['e'.charCodeAt(0)]); await ok('e', 8000);
+  const data = padTo(img, F.page); const pages = data.length / F.page;
+  log(`Schreiben / writing ${data.length} Byte (${pages} Seiten / pages) …`);
+  for (let p = 0; p < pages; p++) {
+    const a = p * F.page;
+    await ser.write(['A'.charCodeAt(0), (a >> 9) & 0xFF, (a >> 1) & 0xFF]); await ok('A');
+    await ser.write(['B'.charCodeAt(0), F.page >> 8, F.page & 0xFF, 'F'.charCodeAt(0), ...data.subarray(a, a + F.page)]); await ok('B', 3000);
+    setProgress(0.05 + 0.6 * (p + 1) / pages);
+  }
+  log('Prüfen / verifying …');
+  for (let p = 0; p < pages; p++) {
+    const a = p * F.page;
+    await ser.write(['A'.charCodeAt(0), (a >> 9) & 0xFF, (a >> 1) & 0xFF]); await ok('A');
+    await ser.write(['g'.charCodeAt(0), F.page >> 8, F.page & 0xFF, 'F'.charCodeAt(0)]);
+    const r = await ser.read(F.page, 3000);
+    if (!same(r, data.subarray(a, a + F.page))) throw new Error(`Prüfung fehlgeschlagen bei / verify failed at 0x${a.toString(16)}`);
+    setProgress(0.65 + 0.33 * (p + 1) / pages);
+  }
+  await ser.write(['L'.charCodeAt(0)]); await ok('L');
+  await ser.write(['E'.charCodeAt(0)]); try { await ok('E', 1000); } catch (e) {}
+  log('Bootloader verlassen, Board startet / bootloader left, board restarts.');
+}
+
+/* ---------------------------------------------------------------- STK500 v1 (optiboot) */
+async function stk1Cmd(ser, bytes, replyLen = 0, timeout = 1500) {
+  await ser.write([...bytes, 0x20]);
+  const r = await ser.read(2 + replyLen, timeout);
+  if (r[0] !== 0x14 || r[r.length - 1] !== 0x10) throw new Error(`STK500: ${r.map(hex2).join(' ')}`);
+  return r.slice(1, 1 + replyLen);
+}
+async function stk500v1Flash(ser, img, mcu) {
+  const F = FLASH[mcu]; const sig = SIG[mcu];
+  await dtrReset(ser);
+  let synced = false;
+  for (let i = 0; i < 8 && !synced; i++) { try { await stk1Cmd(ser, [0x30], 0, 300); synced = true; } catch (e) { ser.flush(); await sleep(50); } }
+  if (!synced) throw new Error('keine Antwort vom Bootloader (optiboot) / no reply from bootloader');
+  const s = await stk1Cmd(ser, [0x75], 3);
+  log(`Signatur ${s.map(hex2).join(' ')} (${mcu}: ${sig.map(hex2).join(' ')})`);
+  if (!same(s, sig)) throw new Error('falscher Chip / wrong chip: ' + s.map(hex2).join(' '));
+  if (img.length > F.size - F.boot) throw new Error(`Firmware zu groß / too large: ${img.length}`);
+  await stk1Cmd(ser, [0x50]);
+  const data = padTo(img, F.page); const pages = data.length / F.page;
+  log(`Schreiben / writing ${data.length} Byte (${pages} Seiten / pages) …`);
+  for (let p = 0; p < pages; p++) {
+    const a = p * F.page, w = a >> 1;
+    await stk1Cmd(ser, [0x55, w & 0xFF, (w >> 8) & 0xFF]);
+    await stk1Cmd(ser, [0x64, F.page >> 8, F.page & 0xFF, 0x46, ...data.subarray(a, a + F.page)], 0, 3000);
+    setProgress(0.05 + 0.6 * (p + 1) / pages);
+  }
+  log('Prüfen / verifying …');
+  for (let p = 0; p < pages; p++) {
+    const a = p * F.page, w = a >> 1;
+    await stk1Cmd(ser, [0x55, w & 0xFF, (w >> 8) & 0xFF]);
+    const r = await stk1Cmd(ser, [0x74, F.page >> 8, F.page & 0xFF, 0x46], F.page, 3000);
+    if (!same(r, data.subarray(a, a + F.page))) throw new Error(`Prüfung fehlgeschlagen bei / verify failed at 0x${a.toString(16)}`);
+    setProgress(0.65 + 0.33 * (p + 1) / pages);
+  }
+  await stk1Cmd(ser, [0x51]);
+  log('Bootloader verlassen, Board startet / bootloader left, board restarts.');
+}
+
+/* ---------------------------------------------------------------- STK500 v2 (Mega 2560) */
+let stk2Seq = 0;
+async function stk2Cmd(ser, body, timeout = 1500) {
+  stk2Seq = (stk2Seq + 1) & 0xFF;
+  const msg = [0x1B, stk2Seq, body.length >> 8, body.length & 0xFF, 0x0E, ...body];
+  msg.push(msg.reduce((a, b) => a ^ b, 0));
+  await ser.write(msg);
+  const h = await ser.read(5, timeout);
+  if (h[0] !== 0x1B || h[4] !== 0x0E) throw new Error(`STK500v2: Rahmen / frame ${h.map(hex2).join(' ')}`);
+  const len = (h[2] << 8) | h[3];
+  const rb = await ser.read(len + 1, timeout);
+  const all = [...h, ...rb]; const cks = all.slice(0, -1).reduce((a, b) => a ^ b, 0);
+  if (cks !== all[all.length - 1]) throw new Error('STK500v2: Prüfsumme / checksum');
+  const r = rb.slice(0, len);
+  if (r[0] !== body[0]) throw new Error(`STK500v2: Antwort auf / reply to ${hex2(body[0])}: ${hex2(r[0])}`);
+  if (r[1] !== 0x00) throw new Error(`STK500v2: Status ${hex2(r[1])} bei / at ${hex2(body[0])}`);
+  return r;
+}
+async function stk500v2Flash(ser, img, mcu) {
+  const F = FLASH[mcu]; const sig = SIG[mcu];
+  await dtrReset(ser);
+  let r = null;
+  for (let i = 0; i < 8 && !r; i++) { try { r = await stk2Cmd(ser, [0x01], 300); } catch (e) { ser.flush(); await sleep(50); } }
+  if (!r) throw new Error('keine Antwort vom Bootloader (stk500v2) / no reply from bootloader');
+  log('Programmer: ' + String.fromCharCode(...r.slice(3, 3 + r[2])));
+  await stk2Cmd(ser, [0x10, 0xC8, 0x64, 0x19, 0x20, 0x00, 0x53, 0x03, 0xAC, 0x53, 0x00, 0x00]);
+  try {
+    const s = [];
+    for (let i = 0; i < 3; i++) { const x = await stk2Cmd(ser, [0x1D, 4, 4, 0, 0x30, 0x00, i, 0x00]); s.push(x[5]); }
+    log(`Signatur ${s.map(hex2).join(' ')} (${mcu}: ${sig.map(hex2).join(' ')})`);
+    if (!same(s, sig)) throw new Error('falscher Chip / wrong chip: ' + s.map(hex2).join(' '));
+  } catch (e) { if (/wrong chip/.test(e.message)) throw e; log('Signatur nicht lesbar, weiter / signature not readable, continuing: ' + e.message); }
+  if (img.length > F.size - F.boot) throw new Error(`Firmware zu groß / too large: ${img.length}`);
+  const data = padTo(img, F.page); const pages = data.length / F.page;
+  const loadAddr = async a => { const w = (a >> 1) | 0x80000000; await stk2Cmd(ser, [0x06, (w >>> 24) & 0xFF, (w >>> 16) & 0xFF, (w >>> 8) & 0xFF, w & 0xFF]); };
+  log(`Schreiben / writing ${data.length} Byte (${pages} Seiten / pages) …`);
+  for (let p = 0; p < pages; p++) {
+    const a = p * F.page; await loadAddr(a);
+    await stk2Cmd(ser, [0x13, F.page >> 8, F.page & 0xFF, 0xC1, 0x0A, 0x40, 0x4C, 0x20, 0x00, 0x00, ...data.subarray(a, a + F.page)], 3000);
+    setProgress(0.05 + 0.6 * (p + 1) / pages);
+  }
+  log('Prüfen / verifying …');
+  for (let p = 0; p < pages; p++) {
+    const a = p * F.page; await loadAddr(a);
+    const x = await stk2Cmd(ser, [0x14, F.page >> 8, F.page & 0xFF, 0x20], 3000);
+    if (!same(x.slice(2, 2 + F.page), data.subarray(a, a + F.page))) throw new Error(`Prüfung fehlgeschlagen bei / verify failed at 0x${a.toString(16)}`);
+    setProgress(0.65 + 0.33 * (p + 1) / pages);
+  }
+  await stk2Cmd(ser, [0x11, 0x01, 0x01]);
+  log('Bootloader verlassen, Board startet / bootloader left, board restarts.');
+}
+
+/* ---------------------------------------------------------------- Atmel DFU (WebUSB) */
+const DFU = { DETACH:0, DNLOAD:1, UPLOAD:2, GETSTATUS:3, CLRSTATUS:4, GETSTATE:5, ABORT:6 };
+class Dfu {
+  constructor(dev) { this.dev = dev; this.itf = 0; }
+  async open() {
+    await this.dev.open();
+    if (this.dev.configuration === null) await this.dev.selectConfiguration(1);
+    const itf = this.dev.configuration.interfaces.find(i => i.alternates.some(a => a.interfaceClass === 0xFE)) || this.dev.configuration.interfaces[0];
+    this.itf = itf.interfaceNumber; await this.dev.claimInterface(this.itf);
+  }
+  async close() { try { await this.dev.releaseInterface(this.itf); } catch (e) {} try { await this.dev.close(); } catch (e) {} }
+  async out(req, data, value = 0) {
+    const r = await this.dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: req, value, index: this.itf }, data ? new Uint8Array(data) : undefined);
+    if (r.status !== 'ok') throw new Error(`DFU: ${r.status}`);
+  }
+  async in(req, len, value = 0) {
+    const r = await this.dev.controlTransferIn({ requestType: 'class', recipient: 'interface', request: req, value, index: this.itf }, len);
+    if (r.status !== 'ok') throw new Error(`DFU: ${r.status}`);
+    return new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+  }
+  async status() { const s = await this.in(DFU.GETSTATUS, 6); return { status: s[0], poll: s[1] | (s[2] << 8) | (s[3] << 16), state: s[4] }; }
+  async makeIdle() {
+    for (let i = 0; i < 8; i++) {
+      const s = await this.status();
+      if (s.state === 2) return;                                  // dfuIDLE
+      if (s.state === 10) { await this.out(DFU.CLRSTATUS); continue; } // dfuERROR
+      if (s.state === 4 || s.state === 7) { await sleep(Math.max(s.poll, 10)); continue; } // busy
+      await this.out(DFU.ABORT);
+    }
+    throw new Error('DFU: Gerät nicht bereit / device not idle');
+  }
+  async download(data) { await this.out(DFU.DNLOAD, data); const s = await this.status(); if (s.status !== 0) { await this.out(DFU.CLRSTATUS); throw new Error(`DFU: Status ${s.status}, Zustand / state ${s.state}`); } return s; }
+}
+async function dfuFlash(dfu, img, mcu) {
+  const F = FLASH[mcu];
+  if (img.length > F.size - F.boot) throw new Error(`Firmware zu groß / too large: ${img.length}`);
+  await dfu.makeIdle();
+  log('Löschen / erasing …');
+  await dfu.out(DFU.DNLOAD, [0x04, 0x00, 0xFF]);
+  for (let i = 0; i < 100; i++) { const s = await dfu.status(); if (s.state !== 4) { if (s.status !== 0) { await dfu.out(DFU.CLRSTATUS); throw new Error(`DFU: Löschen / erase status ${s.status}`); } break; } await sleep(Math.max(s.poll, 20)); }
+  await sleep(200);
+  const data = padTo(img, F.page); const CH = 1024; const n = Math.ceil(data.length / CH);
+  log(`Schreiben / writing ${data.length} Byte (${n} Blöcke / blocks) …`);
+  const footer = [0, 0, 0, 0, 0x10, 0x44, 0x46, 0x55, 0x01, 0x10, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+  for (let i = 0; i < n; i++) {
+    const a = i * CH, e = Math.min(a + CH, data.length) - 1;
+    const hdr = new Array(32).fill(0); hdr[0] = 0x01; hdr[1] = 0x00; hdr[2] = a >> 8; hdr[3] = a & 0xFF; hdr[4] = e >> 8; hdr[5] = e & 0xFF;
+    await dfu.download([...hdr, ...data.subarray(a, e + 1), ...footer]);
+    setProgress(0.1 + 0.55 * (i + 1) / n);
+  }
+  log('Prüfen / verifying …');
+  for (let i = 0; i < n; i++) {
+    const a = i * CH, e = Math.min(a + CH, data.length) - 1;
+    await dfu.out(DFU.DNLOAD, [0x03, 0x00, a >> 8, a & 0xFF, e >> 8, e & 0xFF]);
+    const r = await dfu.in(DFU.UPLOAD, e - a + 1);
+    if (!same(r, data.subarray(a, e + 1))) throw new Error(`Prüfung fehlgeschlagen bei / verify failed at 0x${a.toString(16)}`);
+    setProgress(0.65 + 0.33 * (i + 1) / n);
+  }
+  log('Anwendung starten / starting application …');
+  await dfu.out(DFU.DNLOAD, [0x04, 0x03, 0x00]);
+  try { await dfu.out(DFU.DNLOAD, []); } catch (e) {}   // Gerät trennt sich hier / device detaches here
+}
+
+/* ---------------------------------------------------------------- Ablauf / flow */
+async function getImage(boardId, step) {
+  const own = ownFiles[boardId + step.idx];
+  if (own) { log(`Datei / file: ${own.name}`); return parseHex(own.text); }
+  if (!manifest || manifest.files[step.file] == null) throw new Error('Firmware-Datei nicht verfügbar / not available: ' + step.file);
+  const r = await fetch('firmware/' + step.file, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`Download ${step.file}: HTTP ${r.status}`);
+  log(`Datei / file: ${step.file} (Firmware ${manifest.version})`);
+  return parseHex(await r.text());
+}
+
+async function startFlash(boardId, idx) {
+  if (busy) return;
+  const step = { ...BOARDS[boardId].steps[idx], idx, boardId };
+  busy = true; renderBoard(); setProgress(0); setStatus(t('st_running'));
+  log(`\n=== ${new Date().toLocaleTimeString()} ${boardId} / ${step.mcu} / ${step.method}`);
+  try {
+    const img = await getImage(boardId, step);
+    log(`Firmware ${img.length} Byte`);
+    if (step.method === 'dfu') await runDfu(img, step.mcu);
+    else await runSerial(img, step);
+    if (touchPending) { setStatus(t('st_touch')); setProgress(0.03); }
+    else { setProgress(1, 'ok'); setStatus(t('st_ok'), 'ok'); }
+  } catch (e) {
+    log('FEHLER / ERROR: ' + (e.message || e)); setProgress(1, 'err'); setStatus(t('st_err', { e: e.message || e }), 'err');
+  } finally { busy = false; renderBoard(); }
+}
+async function runSerial(img, step) {
+  if (!navigator.serial) throw new Error('Web Serial nicht verfügbar / not available');
+  touchPending = null;
+  let port; try { port = await navigator.serial.requestPort(); } catch (e) { throw new Error('kein Port gewählt / no port chosen'); }
+  const info = port.getInfo(); log(`Port: VID ${info.usbVendorId != null ? hex2(info.usbVendorId >> 8) + hex2(info.usbVendorId & 255) : '?'} PID ${info.usbProductId != null ? hex2(info.usbProductId >> 8) + hex2(info.usbProductId & 255) : '?'}`);
+  const ser = new Serial(port);
+  if (step.method === 'avr109') {
+    await ser.open(57600);
+    let id = null; try { id = await avr109Probe(ser); } catch (e) {}
+    if (id) { log(`Bootloader: ${id}`); try { await avr109Flash(ser, img, step.mcu); } finally { await ser.close(); } return; }
+    // kein Bootloader → 1200-Baud-Trick, Board startet neu / no bootloader → 1200 baud touch, board resets
+    log('Kein Bootloader am Port – starte Board per 1200-Baud-Trick neu / no bootloader on port – resetting via 1200 baud touch');
+    await ser.close(); await sleep(100);
+    await ser.open(1200); await ser.setSignals({ dataTerminalReady: false, requestToSend: false }); await sleep(100); await ser.close();
+    touchPending = { boardId: step.boardId, idx: step.idx }; log(t('st_touch'));
+    return;
+  }
+  await ser.open(115200);
+  try { if (step.method === 'stk500v1') await stk500v1Flash(ser, img, step.mcu); else await stk500v2Flash(ser, img, step.mcu); }
+  finally { await ser.close(); }
+}
+async function runDfu(img, mcu) {
+  if (!navigator.usb) throw new Error('WebUSB nicht verfügbar / not available');
+  let dev; try { dev = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x03EB }] }); } catch (e) { throw new Error('kein DFU-Gerät gewählt / no DFU device chosen'); }
+  const chip = DFU_PID[dev.productId] || '?';
+  log(`DFU-Gerät: ${dev.productName || ''} PID ${hex2(dev.productId >> 8)}${hex2(dev.productId & 255)} → ${chip}`);
+  if (chip !== mcu) throw new Error(`falscher Chip / wrong chip: Gerät ist / device is ${chip}, Firmware für / for ${mcu}`);
+  const dfu = new Dfu(dev);
+  try { await dfu.open(); } catch (e) { throw new Error(e.message + ' – Windows: WinUSB-Treiber (Zadig) nötig / Windows: WinUSB driver (Zadig) required'); }
+  try { await dfuFlash(dfu, img, mcu); } finally { await dfu.close(); }
+}
+
+/* ---------------------------------------------------------------- HID → Bootloader */
+document.getElementById('hidbtn').onclick = async () => {
+  const st = document.getElementById('hidstatus'); st.textContent = ''; st.className = 'status';
+  if (!navigator.hid) { st.textContent = 'WebHID nicht verfügbar / not available'; st.className = 'status err'; return; }
+  let devs; try { devs = await navigator.hid.requestDevice({ filters: [{ vendorId: 0xFAFA }] }); } catch (e) { devs = []; }
+  if (!devs.length) { st.textContent = t('hid_none'); st.className = 'status err'; return; }
+  const all = (await navigator.hid.getDevices()).filter(d => d.vendorId === 0xFAFA && d.productId === devs[0].productId);
+  let sent = false;
+  for (const d of (all.length ? all : devs)) {
+    try { if (!d.opened) await d.open(); await d.sendReport(0, new Uint8Array([66, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])); sent = true; } catch (e) {}
+    try { await d.close(); } catch (e) {}
+    if (sent) break;
+  }
+  if (!sent) { st.textContent = t('hid_none'); st.className = 'status err'; return; }
+  const b = document.getElementById('board').value;
+  st.textContent = t('hid_ok') + ((b === 'leonardo' || b === 'promicro') ? ' ' + t('hid_hint32u4') : ''); st.className = 'status ok';
+  log('HID: Bootloader-Befehl gesendet / bootloader command sent');
+};
+
+/* ---------------------------------------------------------------- Start */
+(async () => {
+  if (!navigator.serial && !navigator.usb) document.getElementById('unsupported').style.display = '';
+  try { const r = await fetch('firmware/manifest.json', { cache: 'no-cache' }); if (r.ok) manifest = await r.json(); } catch (e) {}
+  if (location.protocol === 'file:' && !manifest) log('Hinweis: lokal geöffnet – Hex-Dateien per „Eigene Hex-Datei“ wählen. / Opened locally – pick hex files via "own hex file".');
+  applyLang();
+})();
+</script>
+</body>
+</html>

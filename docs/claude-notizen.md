@@ -15,7 +15,22 @@ Stand: 24.11.2026
   Konfig-Layout Version 2, Protokoll 2; Tool-Reiter „LED-Strip“.
 - Alte `led.c`/`pinmap`-Makros entfernt; je Board jetzt `BOARD_PIN_TABLE` in `pinmap.h`.
 - Windows-DLL: Fehler behoben (Hänger beim Prozessende in `DllMain`, Event-Leak, Listenpflege), CMake-Build.
-- Konfigurations-Tool als WebHID-Seite: `tools/lwcconfig-web/index.html` (Edge/Chrome, ohne Installation).
+- Konfigurations-Tool als WebHID-Seite (Edge/Chrome, ohne Installation), seit 24.11.2026 unter `docs/config.html`.
+- **24.11.2026, Nutzerwunsch „alten Inhalt in Ordner old, neuen direkt ins Git, mit Online-Flasher und Config-Tool“:**
+  `old/` = unveränderter Upstream-Stand `40e39ac` (per `git archive`, ohne LUFA-Submodul, mit Hinweis-README);
+  Webseite in `docs/` für GitHub Pages (Quelle: master, Ordner /docs – **Pages noch nicht aktiviert**, braucht
+  `gh api repos/cyclemat/lwcloneu2/pages -X POST -f source[branch]=master -f source[path]=/docs` oder Repo-Settings):
+  `index.html` (Start), `flash.html` (Online-Flasher), `config.html` (Tool), `style.css`, `firmware/*.hex` +
+  `manifest.json` (aus `firmware/publish.sh`), `.nojekyll`. `tools/lwcconfig-web/` entfällt.
+- Online-Flasher: Web Serial für AVR109/Caterina (inkl. 1200-Baud-Trick; Windows zeigt den Bootloader als neuen Port →
+  zweiter Port-Dialog), STK500 v1 (optiboot, DTR-Reset), STK500 v2 (Mega, Wortadresse mit Bit 31); WebUSB für
+  Atmel-DFU (Befehle wie dfu-programmer: Erase 04 00 FF, Program 01 00 start end + 32-Byte-Header + 16-Byte-Suffix,
+  Read 03 00 …, Start-App 04 03 00 + leerer DNLOAD); Chip-Prüfung per Signatur bzw. DFU-PID (2FEE/2FEF/2FF0).
+  Unter Windows braucht WebUSB den WinUSB-Treiber (Zadig) für das DFU-Gerät.
+- Bootloader-Befehl 66 auf 32u4 war im Original wackelig (Caterina läuft per BOOTRST zuerst und löscht MCUSR, danach
+  griff der WDRF-Test nicht). Jetzt Caterina-Schlüssel 0x7777 an 0x0800 vor dem Watchdog-Reset (`hwconfig_32u4.h`
+  `BOOTLOADER_MAGIC_*`), kein Sprung mehr auf 32u4; DFU-Chips: `MCUSR = 0` vor dem Sprung, Bedingung `WDRF || MCUSR==0`.
+- Neues Ziel `arduino_uno__m16u2` (Uno R3 hat 16U2; 8U2-Hex hätte falsche Bootloader-Adresse 0x1800 statt 0x3800).
 
 ## Entscheidungen
 - Konfigurations-Tool läuft im Browser (WebHID) statt als .exe – Nutzer hat nachgefragt, ob seriell: **nein, USB-HID**,
@@ -41,11 +56,16 @@ Stand: 24.11.2026
   Kuriosum: gepufferte stdout-Ausgabe von testapp ging beim Beenden verloren → stdout jetzt ungepuffert.
 - Firmware: `firmware/build.sh` erzeugt 7 Hex-Dateien in `firmware/build/`.
 - Webtool: Headless-Edge-Test – Skript läuft ohne Fehler, Oberfläche wird gerendert; WebHID ohne Gerät nicht testbar.
+- Flasher (24.11.2026): Headless-Edge über lokalen HTTP-Server – keine JS-Fehler, `parseHex` liefert exakt die
+  avr-size-Programmgrößen (Leonardo 12574, Mega 9204), alle 6 Board-Varianten rendern, EN-Umschaltung, STK500v2-Rahmen
+  mit Prüfsumme korrekt. Web Serial / WebUSB / DFU ohne Hardware nicht testbar.
 - winget hing beim Quellen-Update → LLVM-MinGW als Zip lokal entpackt (nicht im Repo).
 
 ## Offen
-- An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno.
+- An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno,
+  Online-Flasher (alle 4 Protokolle), Bootloader-Befehl 66 (Caterina-Schlüssel, DFU-Sprung).
 - GitHub Actions nur `workflow_dispatch` – erster Lauf nach Push auf Ansage des Nutzers.
+- GitHub Pages für `docs/` aktivieren (nach Push, auf Ansage) – dann ist https://cyclemat.github.io/lwcloneu2/ erreichbar.
 - DLL braucht UCRT (Windows 10+; auf Windows 7 UCRT-Update). Für eine MSVC-DLL: CI-Workflow (windows-latest).
 - Webtool: Encoder-Eingänge werden nicht entprellt (wie Upstream), Joystick-Tasten 9–16 nicht vorgesehen.
 - Mögliche Erweiterungen: PWM-Hardwarekanäle, mehr als 32 Eingänge auf dem Mega (CFG_NUM_INPUTS pro Board),

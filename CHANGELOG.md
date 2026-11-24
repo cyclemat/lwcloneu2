@@ -14,14 +14,34 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
   commands `0xB0–0xB3`) and **mirror** (up to 32 entries output → pixels → color following the LED-Wiz output).
 - Konfigurations-Tool: eigener Reiter „LED-Strip“ mit Spiegel-Tabelle (Farbwähler) und Testknöpfen für den
   Direkt-Modus (Füllen, Pixel setzen, Lauflicht). / Tool: new "LED strip" tab with mirror table and direct-mode tests.
+- **Online-Flasher** (`docs/flash.html`, GitHub Pages): Firmware direkt aus Edge/Chrome flashen – Web Serial für
+  Caterina/AVR109 (Leonardo, Pro Micro, inkl. 1200-Baud-Trick), optiboot/STK500 v1 (Uno 328P) und STK500 v2 (Mega 2560);
+  WebUSB für Atmel-DFU (8U2/16U2/32U2). Mit Verify, Chip-Prüfung (Signatur/DFU-PID), eigener Hex-Datei und Knopf
+  „Bootloader per USB-HID starten“. Startseite `docs/index.html`, Hex-Dateien + `manifest.json` in `docs/firmware/`
+  (`firmware/publish.sh`). **Testfunktion – ohne Hardware nur im Headless-Browser geprüft.**
+  **Web flasher** (`docs/flash.html`): flash from Edge/Chrome – Web Serial for Caterina/AVR109, optiboot/STK500 v1,
+  STK500 v2; WebUSB for Atmel DFU. Verify, chip check, own hex file, "start bootloader via HID". Untested on hardware.
+- Neues Firmware-Ziel `arduino_uno__m16u2` für den Uno R3 (16U2 statt 8U2: richtige Bootloader-Adresse).
+  New firmware target `arduino_uno__m16u2` for the Uno R3 (16U2 instead of 8U2: correct bootloader address).
 
 ### Verbessert / Improved
+- Repo-Aufbau: Webseite (Flasher, Konfigurations-Tool, Hex-Dateien) in `docs/`, gemeinsames `style.css`; der
+  unveränderte Original-Stand von 2023 liegt zum Nachschlagen in `old/`. `tools/lwcconfig-web/` entfällt.
+  Repo layout: web page in `docs/`, unchanged upstream snapshot in `old/`; `tools/lwcconfig-web/` is gone.
 - Die 32 LED-Wiz-Ausgänge sind wieder **reine GPIO-Ausgänge wie im Original** (`outputs.c` ohne Strip-Code);
   der Strip liest nur noch die Helligkeiten über `outputs_get_level()`.
   The 32 LED-Wiz outputs are plain GPIO outputs again like the original; the strip only reads their levels.
 - Konfigurationslayout Version 2 (`config.h`): Ausgang = Pin + Flags, neuer Block `mirror[]`, `ws.mode`;
   Protokollversion 2, Firmware 2.1. Alte Konfigurationen im EEPROM werden erkannt und durch die Werksbelegung ersetzt.
   Configuration layout version 2; old EEPROM contents are detected and replaced by the board defaults.
+
+### Behoben / Fixed
+- Befehl „Bootloader starten“ (66) auf Leonardo/Pro Micro: Caterina läuft nach dem Reset zuerst und löscht die
+  Reset-Flags, der bisherige Sprung in den Bootloader griff deshalb nicht. Jetzt wird der Caterina-Schlüssel
+  (0x7777 an 0x0800) gesetzt wie beim 1200-Baud-Trick der Arduino-IDE; der Bootloader meldet sich dann 8 s als
+  serieller Port. Für die DFU-Chips werden vor dem Sprung die Reset-Flags gelöscht (Atmel-DFU erkennt so den Sprung).
+  "Start bootloader" (66) on Leonardo/Pro Micro did not work reliably because Caterina clears the reset flags; the
+  Caterina key (0x7777 at 0x0800) is now set like the Arduino IDE's 1200 baud touch. DFU chips: MCUSR cleared first.
 
 ## 2.0.0 (Beta) – 2026-11-24
 

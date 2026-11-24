@@ -112,4 +112,12 @@ static void inline debug_uart_init(void)
 #define BOOTLOADER_SIZE 4096
 #define BOOTLOADER_START_ADDR  ((uint8_t*)1 + FLASHEND - BOOTLOADER_SIZE)
 
+/* Caterina bleibt nach einem Watchdog-Reset nur im Bootloader, wenn dieser Schlüssel im RAM steht
+ * (so macht es auch der 1200-Baud-Trick der Arduino-IDE). Der Bootloader meldet sich dann 8 s als
+ * serieller Port – lange genug für den Online-Flasher.
+ * Caterina stays in the bootloader after a watchdog reset only if this key is in RAM (same as the
+ * Arduino IDE's 1200-baud touch). It then shows up as a serial port for 8 s – enough for the web flasher. */
+#define BOOTLOADER_MAGIC_ADDR  0x0800
+#define BOOTLOADER_MAGIC_VALUE 0x7777
+
 #endif

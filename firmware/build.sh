@@ -6,7 +6,7 @@
 #   ./build.sh leonardo   nur ein Board / one board (leonardo, promicro, breakout_32u2, mega2560, uno)
 #
 # Sucht avr-gcc im PATH, sonst in der PlatformIO-Toolchain (~/.platformio/packages/toolchain-atmelavr).
-# Ergebnis: build/<ziel>.hex  (+ .elf, .map)  und build.log
+# Ergebnis: build/<ziel>.hex  (+ .elf, .map)  und build.log; danach ./publish.sh für docs/firmware
 # Looks for avr-gcc in PATH, else in the PlatformIO toolchain. Output: build/<target>.hex and build.log
 
 set -e
@@ -64,6 +64,7 @@ hit breakout_32u2 && build breakout_32u2           atmega32u2   8000000 ./breako
 hit mega2560      && build arduino_mega2560__m16u2 atmega16u2  16000000 ./arduino_mega2560/m16u2  main_usb.c descriptors.c $COMMON $LUFA_SRC
 hit mega2560      && build arduino_mega2560__m2560 atmega2560  16000000 ./arduino_mega2560/m2560  main_led.c $COMMON $APP
 hit uno           && build arduino_uno__m8u2       atmega8u2   16000000 ./arduino_uno/m8u2        main_usb.c descriptors.c $COMMON $LUFA_SRC
+hit uno           && build arduino_uno__m16u2      atmega16u2  16000000 ./arduino_uno/m8u2        main_usb.c descriptors.c $COMMON $LUFA_SRC
 hit uno           && build arduino_uno__m328       atmega328p  16000000 ./arduino_uno/m328        main_led.c $COMMON $APP
 
 echo "fertig / done: $(ls build/*.hex | wc -l) hex-Dateien in firmware/build/" | tee -a build.log
