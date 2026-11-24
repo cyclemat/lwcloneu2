@@ -55,6 +55,7 @@
 	#include "config.h"
 	#include "outputs.h"
 	#include "strip.h"
+	#include "strip_serial.h"
 #endif
 
 
@@ -85,6 +86,51 @@ static void main_task(void);
 static void hardware_restart(bool enter_bootloader);
 static void configure_device(void);
 static void handle_output_report(uint8_t *p8);
+
+#if defined(ENABLE_STRIP_SERIAL)
+/* virtueller COM-Port für den LED-Strip (DOF-TeensyStripController-Protokoll, strip_serial.c)
+ * virtual COM port for the LED strip (DOF TeensyStripController protocol, strip_serial.c) */
+static USB_ClassInfo_CDC_Device_t s_cdc =
+{
+	.Config =
+	{
+		.ControlInterfaceNumber = IFACENUMBER_CDC_CCI,
+		.DataINEndpoint         = { .Address = CDC_TX_EPADDR,           .Size = CDC_TXRX_EPSIZE,         .Type = EP_TYPE_BULK,      .Banks = 1 },
+		.DataOUTEndpoint        = { .Address = CDC_RX_EPADDR,           .Size = CDC_TXRX_EPSIZE,         .Type = EP_TYPE_BULK,      .Banks = 1 },
+		.NotificationEndpoint   = { .Address = CDC_NOTIFICATION_EPADDR, .Size = CDC_NOTIFICATION_EPSIZE, .Type = EP_TYPE_INTERRUPT, .Banks = 1 },
+	},
+};
+
+void strip_serial_tx(const uint8_t *p, uint8_t n)
+{
+	if (USB_DeviceState != DEVICE_STATE_Configured)
+		return;
+
+	/* ohne offenen Port (keine Leitungskodierung) verwirft der LUFA-Treiber die Daten selbst
+	 * without an open port (no line encoding) the LUFA driver drops the data itself */
+	CDC_Device_SendData(&s_cdc, p, n);
+	CDC_Device_Flush(&s_cdc);
+}
+
+static void strip_serial_task(void)
+{
+	CDC_Device_USBTask(&s_cdc);
+
+	/* höchstens eine Endpunkt-Bank je Durchlauf, damit Panel und Strip weiterlaufen
+	 * at most one endpoint bank per pass so panel and strip keep running */
+	uint16_t n = CDC_Device_BytesReceived(&s_cdc);
+
+	while (n--)
+	{
+		int16_t const b = CDC_Device_ReceiveByte(&s_cdc);
+
+		if (b < 0)
+			break;
+
+		strip_serial_rx((uint8_t)b);
+	}
+}
+#endif
 
 
 int main(void)
@@ -224,6 +270,10 @@ static void main_task(void)
 	if (USB_DeviceState != DEVICE_STATE_Configured)
 		return;
 
+	#if defined(ENABLE_STRIP_SERIAL)
+	strip_serial_task();
+	#endif
+
 	#if defined(USB_BRIDGE)
 
 	/* Nachrichten vom Haupt-MCU / messages from the main MCU */
@@ -307,10 +357,18 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 	#if defined(ENABLE_PANEL_DEVICE)
 	Endpoint_ConfigureEndpoint(PANEL_EPADDR, EP_TYPE_INTERRUPT, PANEL_EPSIZE, 1);
 	#endif
+	#if defined(ENABLE_STRIP_SERIAL)
+	CDC_Device_ConfigureEndpoints(&s_cdc);
+	#endif
 }
 
 void EVENT_USB_Device_ControlRequest(void)
 {
+	#if defined(ENABLE_STRIP_SERIAL)
+	/* bearbeitet nur Anfragen an die CDC-Steuerschnittstelle (prüft wIndex) / handles only requests to the CDC control interface */
+	CDC_Device_ProcessControlRequest(&s_cdc);
+	#endif
+
 	switch (USB_ControlRequest.bRequest)
 	{
 	case HID_REQ_GetReport:

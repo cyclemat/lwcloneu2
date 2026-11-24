@@ -30,10 +30,10 @@ LUFA_SRC="$LUFA/Core/AVR8/USBController_AVR8.c $LUFA/Core/AVR8/USBInterrupt_AVR8
           $LUFA/Core/AVR8/Endpoint_AVR8.c $LUFA/Core/AVR8/EndpointStream_AVR8.c $LUFA/Core/AVR8/Host_AVR8.c
           $LUFA/Core/AVR8/Pipe_AVR8.c $LUFA/Core/AVR8/PipeStream_AVR8.c $LUFA/Core/ConfigDescriptors.c
           $LUFA/Core/Events.c $LUFA/Core/USBTask.c $LUFA/Core/DeviceStandardReq.c $LUFA/Core/HostStandardReq.c
-          $LUFA/Class/Common/HIDParser.c"
+          $LUFA/Class/Common/HIDParser.c $LUFA/Class/Device/CDCClassDevice.c"
 
 COMMON="comm.c queue.c clock.c"
-APP="config.c pins.c outputs.c ws2812.c strip.c panel.c proto.c"
+APP="config.c pins.c outputs.c ws2812.c strip.c strip_serial.c panel.c proto.c"
 
 CFLAGS="-Os -std=gnu99 -Wall -Wstrict-prototypes -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
         -fno-strict-aliasing -ffunction-sections -fdata-sections -mrelax -DARCH=ARCH_AVR8 -DBOARD=BOARD_USER

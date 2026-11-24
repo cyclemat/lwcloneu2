@@ -21,6 +21,15 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
   (`firmware/publish.sh`). **Testfunktion – ohne Hardware nur im Headless-Browser geprüft.**
   **Web flasher** (`docs/flash.html`): flash from Edge/Chrome – Web Serial for Caterina/AVR109, optiboot/STK500 v1,
   STK500 v2; WebUSB for Atmel DFU. Verify, chip check, own hex file, "start bootloader via HID". Untested on hardware.
+- **DOF steuert den Strip direkt** (Leonardo/Pro Micro): das Board meldet sich zusätzlich als virtueller COM-Port
+  (CDC-ACM, kein Treiber ab Windows 10) und spricht dort das Protokoll des DOF-**TeensyStripControllers** mit einem
+  Kanal (`firmware/strip_serial.c`, Befehle L/M/V/C/O/R/F, 'A'/'N'). In der Cabinet.xml genügt ein
+  `<TeensyStripController>` mit COM-Port und `NumberOfLedsStrip1`; die Antwort auf „O“ kommt erst nach dem Schreiben
+  des Strips. Build-Schalter `ENABLE_STRIP_SERIAL` (nur 32U4: 16U2/8U2/32U2 haben zu wenige Endpunkte).
+  **Testfunktion – ohne Hardware nicht geprüft.**
+  **DOF drives the strip directly** (Leonardo/Pro Micro): additional virtual COM port speaking the DOF
+  TeensyStripController protocol (one channel, `strip_serial.c`); `<TeensyStripController>` in Cabinet.xml is enough.
+  Build switch `ENABLE_STRIP_SERIAL` (32U4 only). Untested on hardware.
 - Neues Firmware-Ziel `arduino_uno__m16u2` für den Uno R3 (16U2 statt 8U2: richtige Bootloader-Adresse).
   New firmware target `arduino_uno__m16u2` for the Uno R3 (16U2 instead of 8U2: correct bootloader address).
 

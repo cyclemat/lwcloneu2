@@ -35,4 +35,12 @@
 /* Anzahl Joysticks (1..4) im HID-Deskriptor / number of joysticks (1..4) in the HID descriptor */
 #define NUM_JOYSTICKS 4
 
+/* Virtueller COM-Port für den LED-Strip (DOF-TeensyStripController-Protokoll, strip_serial.h). Braucht 3 weitere
+ * USB-Endpunkte – nur auf dem ATmega32U4 möglich (6 Endpunkte; 16U2/8U2/32U2 haben nur 4). Ab Werk aus; die
+ * Boards schalten es in ihrer devconfig.h ein.
+ * Virtual COM port for the LED strip (DOF TeensyStripController protocol, strip_serial.h). Needs 3 more USB
+ * endpoints – only possible on the ATmega32U4 (6 endpoints; 16U2/8U2/32U2 have 4). Off by default; boards
+ * enable it in their devconfig.h. */
+/* #define ENABLE_STRIP_SERIAL */
+
 #endif

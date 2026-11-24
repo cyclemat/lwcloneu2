@@ -89,16 +89,50 @@ typedef struct
 	USB_HID_Descriptor_HID_t               HID_LEDHID;
 	USB_Descriptor_Endpoint_t              HID_LEDReportINEndpoint;
 	#endif
+	#if defined(ENABLE_STRIP_SERIAL)
+	/* virtueller COM-Port (CDC-ACM) für den LED-Strip, siehe strip_serial.h / virtual COM port (CDC ACM) for the LED strip */
+	USB_Descriptor_Interface_Association_t CDC_IAD;
+	USB_Descriptor_Interface_t             CDC_CCI_Interface;
+	USB_CDC_Descriptor_FunctionalHeader_t  CDC_Functional_Header;
+	USB_CDC_Descriptor_FunctionalACM_t     CDC_Functional_ACM;
+	USB_CDC_Descriptor_FunctionalUnion_t   CDC_Functional_Union;
+	USB_Descriptor_Endpoint_t              CDC_NotificationEndpoint;
+	USB_Descriptor_Interface_t             CDC_DCI_Interface;
+	USB_Descriptor_Endpoint_t              CDC_DataOutEndpoint;
+	USB_Descriptor_Endpoint_t              CDC_DataInEndpoint;
+	#endif
 } USB_Descriptor_Configuration_t;
+
+/* Schnittstellennummern; die HID-Schnittstellen bleiben vorn (LED-Wiz-Software erwartet HID)
+ * interface numbers; the HID interfaces stay first (LED-Wiz software expects HID) */
+typedef enum {
+	IFACENUMBER_MISC,
+	#if defined(ENABLE_PANEL_DEVICE)
+	IFACENUMBER_PANEL,
+	#endif
+	#if defined(ENABLE_LED_DEVICE)
+	IFACENUMBER_LED,
+	#endif
+	#if defined(ENABLE_STRIP_SERIAL)
+	IFACENUMBER_CDC_CCI,
+	IFACENUMBER_CDC_DCI,
+	#endif
+	NUM_TOTAL_INTERFACES,
+} iface_numbers;
 
 /* Endpunkte / endpoints */
 #define MISC_EPADDR            (ENDPOINT_DIR_IN | 1)
 #define PANEL_EPADDR           (ENDPOINT_DIR_IN | 2)
 #define LED_EPADDR             (ENDPOINT_DIR_IN | 3)
+#define CDC_NOTIFICATION_EPADDR (ENDPOINT_DIR_IN | 4)
+#define CDC_TX_EPADDR          (ENDPOINT_DIR_IN | 5)
+#define CDC_RX_EPADDR          (ENDPOINT_DIR_OUT | 6)
 
 #define MISC_EPSIZE            64
 #define PANEL_EPSIZE            8
 #define LED_EPSIZE             64
+#define CDC_NOTIFICATION_EPSIZE 8
+#define CDC_TXRX_EPSIZE        32
 
 #define MISC_INTERVAL_MS   10
 #define PANEL_INTERVAL_MS   2

@@ -25,6 +25,7 @@
 #include "clock.h"
 #include "proto.h"
 #include "strip.h"
+#include "strip_serial.h"
 
 
 #if (WS2812_MAX_PIXELS == 0)
@@ -40,6 +41,13 @@ bool strip_handle_report(const uint8_t *p8, uint8_t *reply8)
 	reply8[1] = STATUS_INVALID;
 	return true;
 }
+bool    strip_direct_ready(void) { return false; }
+uint8_t strip_count(void) { return 0; }
+bool    strip_set_count(uint8_t n) { (void)n; return false; }
+void    strip_set_pixel(uint8_t idx, uint8_t r, uint8_t g, uint8_t b) { (void)idx; (void)r; (void)g; (void)b; }
+void    strip_fill(uint8_t first, uint8_t n, uint8_t r, uint8_t g, uint8_t b) { (void)first; (void)n; (void)r; (void)g; (void)b; }
+void    strip_clear(void) {}
+void    strip_show(uint8_t source) { (void)source; }
 
 #else
 
@@ -51,7 +59,7 @@ static uint8_t   s_mode   = STRIP_MODE_DIRECT;
 static uint8_t   s_pos[3];                        /* Byteposition von R, G, B im Pixel / byte position of R, G, B */
 static uint8_t   s_pixels[WS2812_MAX_PIXELS * 3]; /* in Strip-Reihenfolge / in strip order */
 static uint8_t   s_dirty  = 0;                    /* Ausgabe angefordert / output requested */
-static uint8_t   s_show_pending = 0;              /* STRIP_SHOW wartet auf Antwort / awaits reply */
+static uint8_t   s_show_pending = 0;              /* Bitmaske STRIP_SHOW_*: wer wartet auf Antwort / who awaits a reply */
 static uint8_t   s_last_level[CFG_NUM_OUTPUTS];   /* Spiegel: zuletzt gesehene Stufen / mirror: last levels */
 
 
@@ -206,18 +214,81 @@ void strip_task(void)
 
 	ws2812_send(&s_io, s_pixels, (uint16_t)s_count * 3);
 
-	if (s_show_pending)
-	{
-		/* Antwort auf STRIP_SHOW erst jetzt – der Host weiß damit, dass der Strip geschrieben ist
-		 * reply to STRIP_SHOW only now – tells the host the strip has been written */
-		s_show_pending = 0;
+	/* Antworten auf SHOW erst jetzt – der Host weiß damit, dass der Strip geschrieben ist
+	 * replies to SHOW only now – tells the host the strip has been written */
+	uint8_t const pending = s_show_pending;
+	s_show_pending = 0;
 
+	if (pending & STRIP_SHOW_HID)
+	{
 		uint8_t r[PROTO_REPORT_SIZE];
 		memset(r, 0x00, sizeof(r));
 		r[0] = CMD_STRIP_SHOW;
 		r[1] = STATUS_OK;
 		proto_push_reply(r);
 	}
+
+	if (pending & STRIP_SHOW_SERIAL)
+		strip_serial_show_done();
+}
+
+
+/* ------------------------------------------------------------------ Direkt-Zugriff / direct access */
+
+bool strip_direct_ready(void)
+{
+	return s_active && s_mode == STRIP_MODE_DIRECT;
+}
+
+uint8_t strip_count(void)
+{
+	return s_active ? s_count : 0;
+}
+
+bool strip_set_count(uint8_t n)
+{
+	if (!s_active || n == 0 || n > WS2812_MAX_PIXELS)
+		return false;
+
+	if (n != s_count)
+	{
+		/* Pixel hinter der neuen Länge sofort dunkel, damit nichts stehen bleibt
+		 * pixels beyond the new length go dark right away so nothing stays lit */
+		if (n < s_count)
+			ws2812_send(&s_io, s_pixels, (uint16_t)s_count * 3);  /* letzter Stand / last state */
+		memset(s_pixels, 0x00, sizeof(s_pixels));
+		s_count = n;
+		s_dirty = 1;
+	}
+	return true;
+}
+
+void strip_set_pixel(uint8_t idx, uint8_t r, uint8_t g, uint8_t b)
+{
+	if (idx < s_count)
+		put_pixel(idx, r, g, b);
+}
+
+void strip_fill(uint8_t first, uint8_t n, uint8_t r, uint8_t g, uint8_t b)
+{
+	uint16_t last = (uint16_t)first + n;
+
+	if (last > s_count)
+		last = s_count;
+
+	for (uint16_t p = first; p < last; p++)
+		put_pixel((uint8_t)p, r, g, b);
+}
+
+void strip_clear(void)
+{
+	memset(s_pixels, 0x00, sizeof(s_pixels));
+}
+
+void strip_show(uint8_t source)
+{
+	s_dirty = 1;
+	s_show_pending |= source;
 }
 
 
@@ -277,8 +348,7 @@ bool strip_handle_report(const uint8_t *p8, uint8_t *reply8)
 			return true;
 		}
 
-		s_dirty = 1;
-		s_show_pending = 1;
+		strip_show(STRIP_SHOW_HID);
 		return false;       /* Antwort kommt aus strip_task() / reply comes from strip_task() */
 
 	default:

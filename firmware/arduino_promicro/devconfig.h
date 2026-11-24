@@ -9,4 +9,7 @@
 
 #include "../devconfig_default.h"
 
+/* virtueller COM-Port für den LED-Strip (DOF), siehe devconfig_default.h / virtual COM port for the LED strip (DOF) */
+#define ENABLE_STRIP_SERIAL
+
 #endif

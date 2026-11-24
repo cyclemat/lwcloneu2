@@ -61,6 +61,52 @@ Stand: 24.11.2026
   mit Prüfsumme korrekt. Web Serial / WebUSB / DFU ohne Hardware nicht testbar.
 - winget hing beim Quellen-Update → LLVM-MinGW als Zip lokal entpackt (nicht im Repo).
 
+## DOF und WS2811/WS2812 (recherchiert 24.11.2026, Quellen: TeensyStripController.ino, DOF TeensyStripController.cs,
+## WemosD1StripController.cs, LedStrip.cs auf GitHub; die DOF-Doku selbst beschreibt das Protokoll nicht)
+- DOF kennt für adressierbare Strips nur **serielle Controller** (USB-CDC/COM-Port): TeensyStripController (Teensy 3.2 +
+  OctoWS2811, 8 Kanäle × max. 1100 LEDs), WemosD1MPStripController (gleiches Protokoll + Erweiterungen) und den
+  eingestellten DirectStripController (FT245R-Bitbang). Kein HID-Strip-Controller, Baudrate egal (USB).
+- **Protokoll (Byte-Befehle, Antwort 'A' = ACK / 'N' = NACK, Zahlen Big-Endian):**
+  `L hi lo` LEDs je Kanal setzen · `M` → `hi lo` max. LEDs je Kanal + 'A' · `V` → `major minor` + 'A' ·
+  `C` alle Pixel löschen · `O` ausgeben (show) · `R hi lo(first) hi lo(count)` + 3 Byte je LED ·
+  `F hi lo hi lo r g b` Bereich füllen. Wemos zusätzlich: `Z strip nstrips-1 hi lo` (Länge je Strip), `T` Test,
+  `Q first(2) nData(2) nLeds(2)` + RLE-Blöcke `cnt r g b`.
+- **Handshake beim Verbinden:** DOF schickt ein 0x00-Byte, erwartet 'A' oder 'N' (20 ms); kommt nichts, schickt es
+  3000 Null-Bytes (bricht ein halb empfangenes R-Kommando ab), wartet 50 ms, 20 Versuche. Dann `M`, Prüfung
+  max ≥ konfiguriert, `L` mit max(NumberOfLedsStripN), `C`, `O`.
+- **Je Frame:** für jeden Kanal i mit LEDs: `R` mit first = i × LEDs-je-Kanal, dann warten auf 'A'; zuletzt `O` +
+  'A'. Ein Kanal (unser Fall) → first = 0 … n−1. Fehlende 'A' = Exception/Abbruch in DOF.
+- **Farben:** DOF ordnet die Bytes selbst nach `ColorOrder` des LedStrip-Toys um (Default **RBG**!) und schickt sie
+  roh; der Teensy sendet unverändert (WS2811_RGB). `FirstLedNumber` zählt ab 1 (→ Byte-Offset (n−1)×3).
+  Für uns: in DOF `ColorOrder=RGB` empfehlen und die Reihenfolge nur im Tool (`ws.order`) einstellen – sonst doppelt.
+- **Machbarkeit bei uns:** CDC braucht 3 Endpunkte (Notify IN, Data IN, Data OUT). 32u4 hat 6 (wir nutzen 3 HID-IN)
+  → passt (Leonardo, Pro Micro). 16u2/8u2/32u2 haben nur 4 → CDC nur, wenn die 3 HID-Schnittstellen auf eine
+  zusammengelegt würden, was die LED-Wiz-Kompatibilität (eigene Schnittstelle, 8-Byte-Reports ohne Report-ID) bricht
+  → für Uno/Mega/Breakout nicht sinnvoll. LUFA-CDC-Klassentreiber liegt in `firmware/lufa` (CDCClassDevice.c).
+  Windows 10/11 bindet CDC-ACM automatisch (usbser), kein INF nötig.
+- **Eigene DOF-„DLL“ (Nutzerfrage 24.11.2026):** DOF (MIT-Lizenz, .NET Framework 4.8, C#) hat **keinen Plugin-Lader**
+  für Output-Controller. `OutputControllerList.ReadXml` sucht den Typnamen aus Cabinet.xml zwar in *allen geladenen*
+  Assemblies (`AppDomain.CurrentDomain.GetAssemblies()`), lädt aber selbst keine fremde DLL. Weg: eigene C#-Klasse
+  `LWCloneU2StripController : OutputControllerCompleteBase` (→ `ISupportsSetValues`, damit das LedStrip-Toy sie nutzt)
+  **in DOF einbauen** und als Pull Request an DirectOutput/DirectOutput bzw. mjrgh/DirectOutput (R3++); so kamen auch
+  DudesCab, PinOne, PSPico (Pinscape Pico) hinein. Abstrakte Methoden: GetNumberOfConfiguredOutputs, VerifySettings,
+  ConnectToController, DisconnectFromController, UpdateOutputs(byte[]). DOF spricht LED-Wiz **direkt per HID**
+  (`HIDImports`, CreateFile/WriteFile) – unsere ledwiz.dll wird von DOF nicht benutzt (nur LedBlinky, PinballX u. a.).
+  Firmware-Voraussetzung: 8-Byte-Reports (2 Pixel je SET_REPORT ≈ 1 ms) sind für DOF zu langsam → eigene 4. HID-
+  Schnittstelle „Strip“ mit 64-Byte-Output-Report (≈ 20 Pixel/Report) + 1 IN-Endpunkt für die SHOW-Antwort; passt
+  auch auf 16u2/8u2/32u2 (4 Endpunkte, 3 belegt). LED-Wiz-Report muss 8 Byte ohne Report-ID bleiben.
+- **Entscheidung 24.11.2026:** Nutzer will **keine eigene DOF-Klasse** („DOF wird nicht mehr gepflegt“) → CDC-Weg
+  umgesetzt: `strip_serial.c/.h` (Zustandsautomat, Teensy-Protokoll, 1 Kanal), CDC-ACM mit IAD in `descriptors.c/.h`
+  (Gerät jetzt Klasse EF/02/01 auf 32u4, `config_flag_serial` in bcdDevice/Seriennummer gegen Windows-Deskriptor-Cache),
+  LUFA-CDC-Klassentreiber eingebunden (build.sh + lufa.mk `LUFA_SRC_USBCLASS_DEVICE`), `ENABLE_STRIP_SERIAL` in
+  devconfig.h von Leonardo/Pro Micro. Strip-API erweitert (`strip_direct_ready/count/set_count/set_pixel/fill/clear/show`),
+  SHOW-Antwort als Bitmaske HID/SERIAL. 'L' setzt die Pixelzahl zur Laufzeit (nicht gespeichert). Leonardo: 44,7 % Flash
+  (+2,1 KB), 63,4 % RAM. Endpunkte: EP4 Notify 8, EP5 IN 32, EP6 OUT 32.
+- Ursprüngliche Umsetzungsidee CDC: Modul `strip_serial.c` (Build-Schalter, nur 32u4): CDC-Schnittstelle „LWCloneU2 Strip“, Teensy-
+  Protokoll 1 Kanal (M = WS2812_MAX_PIXELS, L ≤ konfigurierte Pixel), schreibt in den Direkt-Modus-Puffer von
+  `strip.c`; 'A' auf `O` erst nach dem Senden (wie STRIP_SHOW). In der Cabinet.xml: `<TeensyStripController>` mit
+  `ComPortName` und `NumberOfLedsStrip1`. Blockierendes Warten des Teensy-Codes nicht übernehmen (Zustandsautomat).
+
 ## Offen
 - An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno,
   Online-Flasher (alle 4 Protokolle), Bootloader-Befehl 66 (Caterina-Schlüssel, DFU-Sprung).

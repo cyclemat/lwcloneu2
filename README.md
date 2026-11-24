@@ -35,7 +35,8 @@ Stand: **Beta** – übersetzt und geprüft, aber noch nicht an echter Hardware 
 - **Analoge Achsen** (bis 8) mit Kalibrierung (Min/Mitte/Max), **Totzone** und Invertierung.
 - **WS2811/WS2812-Strip** an einem zusätzlichen Pin, als eigenes Modul ohne Einfluss auf die 32 Ausgänge.
   **Spiegel-Modus:** Pixelbereiche leuchten in einer Farbe, die Helligkeit folgt einem LED-Wiz-Ausgang (läuft sofort
-  mit DOF). **Direkt-Modus:** eigene Programme setzen die Pixel per USB.
+  mit DOF). **Direkt-Modus:** eigene Programme setzen die Pixel per USB; auf Leonardo/Pro Micro zusätzlich als
+  virtueller COM-Port im Protokoll des DOF-TeensyStripControllers – DOF steuert den Strip dann direkt.
 - `ledwiz.dll`-Ersatz (32/64 Bit), asynchron, blockiert die Anwendung nicht.
 
 ## Unterstützte Boards
@@ -278,6 +279,39 @@ Ablauf: beliebig viele SET/FILL, dann SHOW, dann auf die Antwort warten, dann de
 Während der Strip geschrieben wird, sind Interrupts gesperrt (~30 µs je Pixel), und beim Mega/Uno kann die interne
 UART in dieser Zeit Reports verlieren. Richtwert: 64 Pixel ≈ 32 Reports ≈ 30–40 Bilder/s.
 
+### LED-Strip direkt aus DOF ansteuern (Leonardo / Pro Micro)
+
+Das DirectOutput Framework kennt für adressierbare Strips nur serielle Controller (TeensyStripController,
+Wemos). Deshalb meldet sich der LWCloneU2 auf dem **ATmega32U4** zusätzlich als **virtueller COM-Port** („USB
+Serial Device“, Windows 10/11 ohne Treiber) und spricht dort das Protokoll des TeensyStripController mit einem Kanal.
+DOF braucht keine Änderung – in der `Cabinet.xml`:
+
+```xml
+<OutputControllers>
+  <TeensyStripController>
+    <Name>LWCloneU2 Strip</Name>
+    <ComPortName>COM7</ComPortName>          <!-- Port des LWCloneU2, siehe Geräte-Manager -->
+    <NumberOfLedsStrip1>60</NumberOfLedsStrip1>
+  </TeensyStripController>
+</OutputControllers>
+<Toys>
+  <LedStrip>
+    <Name>Undercab</Name>
+    <OutputControllerName>LWCloneU2 Strip</OutputControllerName>
+    <Width>60</Width><Height>1</Height>
+    <FirstLedNumber>1</FirstLedNumber>
+    <ColorOrder>RGB</ColorOrder>            <!-- Reihenfolge stellt das Tool ein, DOF nichts umsortieren lassen -->
+  </LedStrip>
+</Toys>
+```
+
+Voraussetzungen: im Tool Daten-Pin und Pixel gesetzt, Betriebsart **Direkt**, „Speichern“. `NumberOfLedsStrip1` darf
+die Pixelzahl des Boards nicht überschreiten (DOF fragt die Grenze ab und setzt die Länge selbst). Nur Strip 1 wird
+bedient; `ColorOrder` in DOF auf `RGB` lassen und die echte Reihenfolge im Tool wählen, sonst wird doppelt gedreht.
+Die Antwort auf den Ausgabe-Befehl kommt erst, wenn der Strip geschrieben ist – DOF wartet darauf, so geht nichts
+verloren. Uno, Mega und Breakout haben dafür keine freien USB-Endpunkte; dort bleibt der Spiegel-Modus, der mit DOF
+über die LED-Wiz-Ausgänge ohnehin funktioniert.
+
 ### Reiter „Gerät“
 
 - **LED-Wiz-ID (1–16):** unter welcher Nummer das Board in der LED-Wiz-Software erscheint. Mehrere Boards an einem PC
@@ -350,6 +384,7 @@ firmware/
   pins.c/.h         Pin-Index → Port/Bit/ADC je Board (BOARD_PIN_TABLE in <board>/pinmap.h)
   outputs.c/.h      32 Ausgänge: LED-Wiz-Profile, Soft-PWM auf GPIO (Grundcode, wie Original)
   strip.c/.h        WS2811/WS2812-Strip: Direkt-Modus (USB-Befehle) und Spiegel-Modus (folgt den Ausgängen)
+  strip_serial.c/.h virtueller COM-Port (CDC) mit DOF-TeensyStripController-Protokoll (nur 32U4, ENABLE_STRIP_SERIAL)
   ws2812.c/.h       Bit-Bang-Treiber 800 kHz (8/16 MHz)
   panel.c/.h        Eingänge: Entprellung, Shift, Encoder, Analog-Achsen, HID-Reports
   descriptors.c/.h  USB-Deskriptoren (Misc, Panel, LED-Wiz)
@@ -401,7 +436,8 @@ Status: **beta** – compiled and reviewed, not yet tested on real hardware.
 - **Analog axes** (up to 8) with calibration (min/center/max), **dead zone** and inversion.
 - **WS2811/WS2812 strip** on an extra pin as a separate module that leaves the 32 outputs untouched.
   **Mirror mode:** pixel ranges light up in a color, brightness follows an LED-Wiz output (works with DOF right away).
-  **Direct mode:** your own programs set the pixels via USB.
+  **Direct mode:** your own programs set the pixels via USB; on Leonardo/Pro Micro also as a virtual COM port speaking
+  the DOF TeensyStripController protocol – DOF then drives the strip directly.
 - `ledwiz.dll` replacement (32/64 bit), asynchronous, does not block the application.
 
 ## Supported boards
@@ -639,6 +675,39 @@ press "Apply" first. The status text on the right tells whether the board curren
 Sequence: any number of SET/FILL, then SHOW, then wait for the reply, then the next frame. The wait matters: while the
 strip is written interrupts are blocked (~30 µs per pixel), and on the Mega/Uno the internal UART can lose reports
 during that time. Rule of thumb: 64 pixels ≈ 32 reports ≈ 30–40 frames/s.
+
+### Driving the LED strip directly from DOF (Leonardo / Pro Micro)
+
+The DirectOutput Framework only knows serial controllers for addressable strips (TeensyStripController, Wemos).
+That is why the LWCloneU2 on the **ATmega32U4** additionally shows up as a **virtual COM port** ("USB Serial Device",
+no driver on Windows 10/11) and speaks the TeensyStripController protocol there with one channel. DOF needs no
+change – in `Cabinet.xml`:
+
+```xml
+<OutputControllers>
+  <TeensyStripController>
+    <Name>LWCloneU2 Strip</Name>
+    <ComPortName>COM7</ComPortName>          <!-- the LWCloneU2's port, see Device Manager -->
+    <NumberOfLedsStrip1>60</NumberOfLedsStrip1>
+  </TeensyStripController>
+</OutputControllers>
+<Toys>
+  <LedStrip>
+    <Name>Undercab</Name>
+    <OutputControllerName>LWCloneU2 Strip</OutputControllerName>
+    <Width>60</Width><Height>1</Height>
+    <FirstLedNumber>1</FirstLedNumber>
+    <ColorOrder>RGB</ColorOrder>            <!-- the tool sets the order, do not let DOF reorder -->
+  </LedStrip>
+</Toys>
+```
+
+Requirements: data pin and pixel count set in the tool, mode **Direct**, "Save". `NumberOfLedsStrip1` must not exceed
+the board's pixel limit (DOF queries the limit and sets the length itself). Only strip 1 is served; leave `ColorOrder`
+in DOF at `RGB` and choose the real order in the tool, otherwise colors get swapped twice. The reply to the output
+command is sent only after the strip has been written – DOF waits for it, so nothing is lost. Uno, Mega and the
+breakout have no free USB endpoints for this; there the mirror mode remains, which works with DOF through the LED-Wiz
+outputs anyway.
 
 ### "Device" tab
 
