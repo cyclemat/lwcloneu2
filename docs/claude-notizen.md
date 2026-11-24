@@ -111,6 +111,12 @@ Stand: 24.11.2026
 - An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno,
   Online-Flasher (alle 4 Protokolle), Bootloader-Befehl 66 (Caterina-Schlüssel, DFU-Sprung).
 - GitHub Actions nur `workflow_dispatch` – erster Lauf nach Push auf Ansage des Nutzers.
+- **Pages-Panne 24.11.2026:** die ersten beiden Pages-Builds (13:46, 13:51 UTC) scheiterten mit
+  „No url found for submodule path 'firmware/lufa' in .gitmodules“: `firmware/lufa` stand im Index noch als Gitlink
+  (160000, Upstream-Commit 012c565), die `.gitmodules` war gelöscht, die LUFA-Dateien lokal da, aber nie committed.
+  Fix: `git rm --cached firmware/lufa` + `git add firmware/lufa`; `.gitignore` `build/` → `/build/` + `firmware/build/`,
+  weil Git unter Windows (core.ignorecase) sonst `LUFA/Build/` (Make-Fragmente für lufa.mk) verschluckt. Lokal liegt noch
+  `.git/modules/firmware/` als Rest des alten Submoduls – harmlos. Vor dem Fix war das Repo von außen nicht baubar.
 - GitHub Pages für `docs/` ist seit 24.11.2026 aktiv (per `gh api … /pages`, Quelle master//docs; Nutzer-OK „ja“).
   https_enforced noch false – nach dem ersten Zertifikat per `gh api -X PUT repos/cyclemat/lwcloneu2/pages -F https_enforced=true` setzen.
 - Flasher-Anleitung (24.11.2026, Nutzerwunsch „online flasher mit anleitung“): Karte „So funktioniert es“ in

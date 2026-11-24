@@ -1,5 +1,6 @@
 # Build-Ausgaben / build output
-build/
+/build/
+firmware/build/
 build-*/
 win32/bin/
 win32/build/*/Debug/

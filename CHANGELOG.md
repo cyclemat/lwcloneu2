@@ -52,6 +52,13 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
   Configuration layout version 2; old EEPROM contents are detected and replaced by the board defaults.
 
 ### Behoben / Fixed
+- `firmware/lufa` lag auf GitHub nur als toter Submodul-Verweis (die `.gitmodules` war schon entfernt, die Dateien
+  aber nie eingecheckt). Dadurch schlug jeder Checkout mit Submodulen fehl – auch der GitHub-Pages-Aufbau – und das
+  Repo war von außen nicht baubar. Die gekürzte LUFA-Kopie (Release 130901, MIT-artige Lizenz) ist jetzt wirklich im
+  Repo; die `.gitignore`-Regel `build/` ignorierte zudem `LUFA/Build/` (Groß-/Kleinschreibung) und ist eingegrenzt.
+  `firmware/lufa` was only a dangling submodule pointer on GitHub (`.gitmodules` removed, files never committed), so
+  every recursive checkout failed – including the GitHub Pages build. The trimmed LUFA copy is now really in the
+  repo; the `.gitignore` rule `build/` also swallowed `LUFA/Build/` and has been narrowed.
 - Befehl „Bootloader starten“ (66) auf Leonardo/Pro Micro: Caterina läuft nach dem Reset zuerst und löscht die
   Reset-Flags, der bisherige Sprung in den Bootloader griff deshalb nicht. Jetzt wird der Caterina-Schlüssel
   (0x7777 an 0x0800) gesetzt wie beim 1200-Baud-Trick der Arduino-IDE; der Bootloader meldet sich dann 8 s als
