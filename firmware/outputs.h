@@ -29,6 +29,12 @@ void outputs_apply_config(void);
 /* Ein 8-Byte-LED-Wiz-Report (SBA oder PBA-Block) / one 8 byte LED-Wiz report (SBA or PBA chunk) */
 void outputs_ledwiz_report(const uint8_t *p8bytes);
 
+/* Ein Soft-PWM-Schritt (alle 200 µs). Auf AVR ruft ihn der Timer-Interrupt LED_TIMER_vect, auf anderen
+ * MCUs (OUTPUTS_TICK_EXTERNAL) der eigene Timer der Portierung.
+ * One soft PWM step (every 200 µs). On AVR the LED_TIMER_vect interrupt calls it, on other MCUs
+ * (OUTPUTS_TICK_EXTERNAL) the port's own timer does. */
+void outputs_tick(void);
+
 /* Aktuelle Helligkeit 0..OUTPUTS_MAX_LEVEL eines Ausgangs (für strip.c, Tests)
  * current level 0..OUTPUTS_MAX_LEVEL of an output (for strip.c, tests) */
 uint8_t outputs_get_level(uint8_t index);

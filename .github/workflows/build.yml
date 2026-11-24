@@ -1,5 +1,5 @@
-# Baut Firmware (alle Boards) und Windows-DLL. Start nur von Hand (workflow_dispatch) oder bei einem Release-Tag.
-# Builds firmware (all boards) and the Windows DLL. Manual start (workflow_dispatch) or on a release tag.
+# Baut Firmware (alle AVR-Boards, Arduino Due) und Windows-DLL. Start nur von Hand (workflow_dispatch) oder bei einem Release-Tag.
+# Builds firmware (all AVR boards, Arduino Due) and the Windows DLL. Manual start (workflow_dispatch) or on a release tag.
 name: Build
 
 on:
@@ -26,6 +26,23 @@ jobs:
         with:
           name: firmware-hex
           path: out/*.hex
+
+  due:
+    name: Firmware Arduino Due (PlatformIO)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: PlatformIO
+        run: pip install platformio
+      - name: Build
+        run: cd firmware_due && pio run 2>&1 | tee build.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-due
+          path: firmware_due/.pio/build/due/firmware.bin
 
   windows:
     name: ledwiz.dll (${{ matrix.arch }})

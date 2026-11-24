@@ -300,6 +300,8 @@ const BOARDS = {
   3: { name:'Arduino Mega 2560', names: [...Array(54).keys()].map(D).concat([...Array(16).keys()].map(A)) },
   4: { name:'Arduino Uno', names: [...Array(14).keys()].map(D).concat([0,1,2,3,4,5].map(A)) },
   5: { name:'Breakout ATmega32U2', names: ['PB0','PB1','PB2','PB3','PB4','PB5','PB6','PB7','PC2','PC4','PC5','PC6','PC7','PD0','PD1','PD2','PD3','PD4','PD5','PD6','PD7'] },
+  /* Due: D0/D1 sind der UART zum 16U2 (gesperrt); alle Pins 3,3 V / D0/D1 are the UART to the 16U2 (reserved); all pins 3.3 V */
+  6: { name:'Arduino Due (3,3 V)', names: [...Array(54).keys()].map(D).concat([...Array(12).keys()].map(A), ['DAC0','DAC1','CANRX','CANTX','SDA1','SCL1','RXLED','TXLED']) },
 };
 
 /* ------------------------------------------------------------------ Funktionscodes / function codes (keydefs.h) */
@@ -420,7 +422,7 @@ async function readPinInfo() {
     const r = await cmdPinInfo(i);
     for (let k = 0; k < 3 && i + k < info.numPins; k++) {
       const port = r[2 + 2*k], b = r[3 + 2*k];
-      pinInfo.push({ port, bit: b & 7, adc: !!(b & 0x80), reserved: port >= 0xFE });
+      pinInfo.push({ port, bit: b & 0x7F, adc: !!(b & 0x80), reserved: port >= 0xFE });   // ARM-Ports haben 32 Bits / ARM ports have 32 bits
     }
   }
 }

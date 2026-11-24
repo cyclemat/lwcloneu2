@@ -31,8 +31,10 @@
 
 #include <string.h>
 #include <stdbool.h>
+#if defined(__AVR__)
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#endif
 #include <util/atomic.h>
 
 #include <hwconfig.h>
@@ -116,7 +118,11 @@ typedef struct {
 
 static axis_t           s_ax[CFG_NUM_AXES];
 static volatile uint8_t s_nax = 0;
-static volatile uint16_t s_adc_raw[CFG_NUM_AXES];
+#if defined(__AVR__)
+static volatile uint16_t s_adc_raw[CFG_NUM_AXES];   /* vom ADC-Interrupt gefüllt / filled by the ADC interrupt */
+#endif
+/* Andere MCUs (firmware_due/) liefern Rohwerte 0..1023 über ADC_read(mux) aus hwconfig.h (Freilauf-ADC).
+ * Other MCUs (firmware_due/) deliver raw values 0..1023 via ADC_read(mux) from hwconfig.h (free-running ADC). */
 
 #endif
 
@@ -229,11 +235,14 @@ void panel_apply_config(void)
 			s_ax[n].center   = c->center;
 			s_ax[n].max      = c->max;
 			s_ax[n].deadzone = c->deadzone;
+			#if defined(__AVR__)
 			s_adc_raw[n]     = c->center;
+			#endif
 			s_joy_has_analog[c->joy] = 1;
 			n++;
 		}
 
+		#if defined(__AVR__)
 		ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 		{
 			s_nax = n;
@@ -244,6 +253,17 @@ void panel_apply_config(void)
 				ADCSRA |= (1 << ADSC);    /* Wandlungskette starten / start conversion chain */
 			}
 		}
+		#else
+		{
+			uint8_t muxes[CFG_NUM_AXES];
+
+			for (uint8_t i = 0; i < n; i++)
+				muxes[i] = s_ax[i].mux;
+
+			ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { s_nax = n; }
+			ADC_select(muxes, n);     /* Freilauf auf genau diesen Kanälen / free-running on exactly these channels */
+		}
+		#endif
 	}
 	#endif
 
@@ -271,6 +291,8 @@ void panel_init(void)
 
 #if defined(BOARD_HAS_ADC)
 
+#if defined(__AVR__)
+
 ISR(ADC_vect)
 {
 	static uint8_t i = 0;
@@ -294,16 +316,26 @@ ISR(ADC_vect)
 	ADCSRA |= (1 << ADSC);
 }
 
+/* Rohwert der Achse i (0..1023) / raw value of axis i */
+static uint16_t axis_raw(uint8_t i)
+{
+	uint16_t v;
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = s_adc_raw[i]; }
+	return v;
+}
+
+#else
+
+static uint16_t axis_raw(uint8_t i)
+{
+	return ADC_read(s_ax[i].mux);
+}
+
+#endif
+
 uint16_t panel_get_axis_raw(uint8_t axis_index)
 {
-	uint16_t v = 0;
-
-	if (axis_index < CFG_NUM_AXES)
-	{
-		ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { v = s_adc_raw[axis_index]; }
-	}
-
-	return v;
+	return (axis_index < s_nax) ? axis_raw(axis_index) : 0;
 }
 
 /* Rohwert → -127..127 mit Kalibrierung, Totzone und Invertierung
@@ -362,11 +394,8 @@ static void UpdateAnalogAxes(void)
 	for (uint8_t i = 0; i < n; i++)
 	{
 		axis_t const * const a = &s_ax[i];
-		uint16_t raw;
 
-		ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { raw = s_adc_raw[i]; }
-
-		s_axis_val[a->joy][a->axis] = axis_scale(a, raw);
+		s_axis_val[a->joy][a->axis] = axis_scale(a, axis_raw(i));
 	}
 
 	for (uint8_t j = 0; j < NUM_JOYSTICKS; j++)
@@ -566,7 +595,7 @@ static void ScanInputs(void)
 	for (uint8_t i = 0; i < s_nin; i++)
 	{
 		input_t const * const in = &s_in[i];
-		uint8_t const level = (*PIN_REG_PIN(&in->io) & in->io.mask) ? 1 : 0;
+		uint8_t const level = pins_read(&in->io);
 		uint8_t const pressed = in->active_high ? level : (uint8_t)!level;
 
 		SetInputCount(i, pressed);

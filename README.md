@@ -48,10 +48,20 @@ Stand: **Beta** – übersetzt und geprüft, aber noch nicht an echter Hardware 
 | Arduino Mega 2560 | ATmega2560 + ATmega16U2 | D2–D53, A0–A15 | ja (16) | D22–D53 (32) | **beide** MCUs flashen |
 | Arduino Uno R2/R3 | ATmega328P + ATmega8U2/16U2 | D2–D13, A0–A5 | ja (6) | D2–D13, A0–A5 (18) | beide MCUs flashen |
 | Breakout ATmega32U2 | ATmega32U2 | 21 Pins (PB0–7, PC2, PC4–7, PD0–7) | nein | wie alte Firmware | 1 KB RAM: 16 Eingänge, 8 Pixel |
+| Arduino Due *(Beta)* | SAM3X8E (ARM Cortex-M3, 84 MHz, **3,3 V**) | D2–D53, A0–A11, DAC0/1, CANRX/TX, SDA1/SCL1, RX/TX-LED (74) | ja (12) | D22–D53 (32) | nativer USB-Port, eigene Firmware `firmware_due/`, DOF-COM-Port, 255 Pixel |
 
 Beim Mega/Uno übernimmt der kleine USB-Chip (16U2/8U2) nur die USB-Seite und reicht alles über die interne UART
 (D0/D1, deshalb im Tool „reserviert“) an den Haupt-MCU weiter; Konfiguration und Pins gehören zum Haupt-MCU.
 Ab Werk sind keine Eingänge und kein Strip eingerichtet (außer Breakout 32U2).
+
+**Arduino Due (Beta – noch an keinem Board getestet):** eigene Firmware in [`firmware_due/`](firmware_due/) (PlatformIO, Arduino-SAM-Core), gleiche Logik
+und gleiches USB-Protokoll wie die AVR-Boards – Konfigurations-Tool und DOF merken keinen Unterschied. Das Board hängt
+am **nativen USB-Port** (nicht am Programming-Port) und meldet sich dort als LWCloneU2 (drei HID-Schnittstellen) plus
+COM-Port für DOF. Die Konfiguration liegt statt im EEPROM im letzten Kilobyte des Flash (Bank 1) und überlebt
+Firmware-Updates über den Online-Flasher. D0/D1 gehen zum 16U2 und sind gesperrt. **Alle Pins sind 3,3 V** – für
+5-V-Treiberplatinen und WS2812-Strips meist ein Pegelwandler (z. B. 74HCT125) nötig. Geflasht wird über den
+ROM-Bootloader SAM-BA (Online-Flasher, `bossac` oder `pio run -t upload`). Firmware und Flash-Weg sind neu und
+ungeprüft – bitte Rückmeldung als GitHub-Issue, das Protokollfenster des Flashers hilft dabei.
 
 ## Schnellstart
 
@@ -64,6 +74,8 @@ Ab Werk sind keine Eingänge und kein Strip eingerichtet (außer Breakout 32U2).
      danach den 16U2 per DFU (Atmel FLIP / `dfu-programmer`) mit `arduino_mega2560__m16u2.hex`.
    - Uno: `avrdude -c arduino -p m328p -P COMx -U flash:w:arduino_uno__m328.hex:i`, danach den USB-Chip per DFU:
      Uno R3 (16U2) mit `arduino_uno__m16u2.hex`, Uno R1/R2 (8U2) mit `arduino_uno__m8u2.hex`.
+   - Due *(Beta)*: nativen Port anschließen, ERASE + RESET (oder 1200-Baud-Trick), dann
+     `bossac -p COMx -e -w -v -b arduino_due.bin -R`.
 2. **Konfigurieren:** [Konfigurations-Tool](https://cyclemat.github.io/lwcloneu2/config.html) in Microsoft Edge
    oder Google Chrome öffnen, „Verbinden“, Pins zuweisen, „Speichern“. Ausführlich weiter unten.
 3. **LED-Wiz-Software:** `ledwiz.dll` (x86 für 32-Bit-Programme, x64 für 64-Bit) neben die Anwendung legen oder
@@ -76,6 +88,9 @@ Atmel FLIP oder Arduino-IDE. Die Seite benutzt **Web Serial** (für die Arduino-
 DFU-Bootloader der USB-Chips); sie liegt im Ordner [`docs/`](docs/) und kann auch lokal geöffnet werden.
 **Stand Beta:** die Abläufe sind nach den Protokollen von avrdude, Caterina, optiboot, stk500boot und dfu-programmer
 umgesetzt, aber noch nicht an echter Hardware getestet – Rückmeldungen bitte als Issue mit dem Protokolltext der Seite.
+**Arduino Due (Beta):** der Flasher spricht zusätzlich das SAM-BA-Protokoll des ROM-Bootloaders (wie `bossac`) über
+Web Serial – Chip-Prüfung, seitenweises Schreiben, Zurücklesen, Boot-Flag, Neustart. Die gespeicherte Konfiguration
+bleibt dabei erhalten. Auch dieser Weg ist noch ungetestet.
 
 ### Voraussetzungen
 
@@ -279,11 +294,12 @@ Ablauf: beliebig viele SET/FILL, dann SHOW, dann auf die Antwort warten, dann de
 Während der Strip geschrieben wird, sind Interrupts gesperrt (~30 µs je Pixel), und beim Mega/Uno kann die interne
 UART in dieser Zeit Reports verlieren. Richtwert: 64 Pixel ≈ 32 Reports ≈ 30–40 Bilder/s.
 
-### LED-Strip direkt aus DOF ansteuern (Leonardo / Pro Micro)
+### LED-Strip direkt aus DOF ansteuern (Leonardo / Pro Micro / Due)
 
 Das DirectOutput Framework kennt für adressierbare Strips nur serielle Controller (TeensyStripController,
-Wemos). Deshalb meldet sich der LWCloneU2 auf dem **ATmega32U4** zusätzlich als **virtueller COM-Port** („USB
-Serial Device“, Windows 10/11 ohne Treiber) und spricht dort das Protokoll des TeensyStripController mit einem Kanal.
+Wemos). Deshalb meldet sich der LWCloneU2 auf dem **ATmega32U4** und auf dem **Due** zusätzlich als **virtueller
+COM-Port** („USB Serial Device“, Windows 10/11 ohne Treiber) und spricht dort das Protokoll des TeensyStripController
+mit einem Kanal.
 DOF braucht keine Änderung – in der `Cabinet.xml`:
 
 ```xml
@@ -360,9 +376,21 @@ Benötigt `avr-gcc`, `avr-libc` (Linux: `apt install gcc-avr avr-libc`; Windows:
 cd firmware
 ./build.sh                # alle Boards ohne make (nur avr-gcc); Ergebnis: firmware/build/*.hex, Protokoll build.log
 ./build.sh leonardo       # ein Board (leonardo, promicro, breakout_32u2, mega2560, uno)
-./publish.sh              # Hex-Dateien + manifest.json nach release/ (daraus bedient sich der Online-Flasher)
+./publish.sh              # Hex-Dateien (+ Due-.bin) + manifest.json nach release/ (daraus bedient sich der Online-Flasher)
 make                      # alternativ mit den LUFA-Makefiles (Linux, make nötig); Ergebnis: <board>/<board>.hex
 ```
+
+**Arduino Due (Beta)** (PlatformIO, Plattform `atmelsam`, Arduino-SAM-Core – wird beim ersten Bauen geladen):
+
+```sh
+cd firmware_due
+pio run                   # Ergebnis: .pio/build/due/firmware.bin, Protokoll build.log
+pio run -t upload         # über den nativen USB-Port (1200-Baud-Trick + bossac), alternativ der Online-Flasher
+```
+
+Die gemeinsamen Module (Protokoll, Konfiguration, Ausgänge, Panel, Strip) kommen dabei unverändert aus `firmware/`
+(`firmware_due/shared.py`); in `firmware_due/src/` liegen nur USB-Anbindung, Pin-Tabelle, Timer, ADC, Flash-Speicher
+und WS2812-Treiber für den SAM3X.
 
 ### Windows-DLL und Tools
 ```sh
@@ -390,15 +418,24 @@ firmware/
   descriptors.c/.h  USB-Deskriptoren (Misc, Panel, LED-Wiz)
   <board>/          hwconfig.h (Timer, UART, ADC), pinmap.h (Pin-Tabelle, Werksbelegung), devconfig.h, makefile
   lufa/             LUFA 130901 (gekürzt)
+firmware_due/       Arduino Due (SAM3X8E, PlatformIO + Arduino-SAM-Core); nutzt proto/config/outputs/panel/strip aus firmware/
+  platformio.ini, shared.py, boards/lwc_due.json
+  src/hwconfig.h    Board-Einstellungen (Pins, Werksbelegung, 255 Pixel, Schnittstellen)
+  src/main.cpp      Hauptschleife, SETID/DFU, LED-Wiz-ID
+  src/usb_lwz.cpp   PluggableUSB-Modul: drei HID-Schnittstellen + Gerätedeskriptor mit LED-Wiz-VID/PID
+  src/pins_due.cpp  Pin-Tabelle aus dem Core (g_APinDescription), PIO-Zugriff
+  src/hw_due.cpp    Soft-PWM-Timer (TC3), Freilauf-ADC, EEPROM-Ersatz im Flash (EFC), Neustart/SAM-BA
+  src/ws2812_due.cpp Bit-Bang 800 kHz mit Zyklenzähler
+  src/compat/       Ersatz für <util/atomic.h>, <avr/eeprom.h>, <avr/io.h>
 win32/
   driver/           ledwiz.dll (ledwiz.cpp, usbdev.cpp)
   testapp/, lwcconfig/
 docs/               Webseite (GitHub Pages: https://cyclemat.github.io/lwcloneu2/)
   index.html        Startseite
-  flash.html        Online-Flasher (Web Serial: AVR109/Caterina, STK500 v1/v2; WebUSB: Atmel DFU)
+  flash.html        Online-Flasher (Web Serial: AVR109/Caterina, STK500 v1/v2, SAM-BA (Due); WebUSB: Atmel DFU)
   config.html       Konfigurations-Tool (WebHID)
   style.css         gemeinsames Aussehen
-release/            fertige .hex-Dateien + manifest.json (von firmware/publish.sh) – Quelle des Online-Flashers
+release/            fertige .hex-Dateien, arduino_due.bin + manifest.json (von firmware/publish.sh) – Quelle des Online-Flashers
 old/                unveränderter Original-Stand von cithraidt/lwcloneu2 (Aug. 2023), nur zum Nachschlagen
 ```
 
@@ -449,10 +486,20 @@ Status: **beta** – compiled and reviewed, not yet tested on real hardware.
 | Arduino Mega 2560 | ATmega2560 + ATmega16U2 | D2–D53, A0–A15 | yes (16) | D22–D53 (32) | flash **both** MCUs |
 | Arduino Uno R2/R3 | ATmega328P + ATmega8U2/16U2 | D2–D13, A0–A5 | yes (6) | D2–D13, A0–A5 (18) | flash both MCUs |
 | Breakout ATmega32U2 | ATmega32U2 | 21 pins (PB0–7, PC2, PC4–7, PD0–7) | no | like the old firmware | 1 KB RAM: 16 inputs, 8 pixels |
+| Arduino Due *(beta)* | SAM3X8E (ARM Cortex-M3, 84 MHz, **3.3 V**) | D2–D53, A0–A11, DAC0/1, CANRX/TX, SDA1/SCL1, RX/TX LED (74) | yes (12) | D22–D53 (32) | native USB port, own firmware `firmware_due/`, DOF COM port, 255 pixels |
 
 On the Mega/Uno the small USB chip (16U2/8U2) only handles USB and forwards everything over the internal UART
 (D0/D1, hence "reserved" in the tool) to the main MCU, which owns configuration and pins. From the factory no inputs
 and no strip are configured (except on the Breakout 32U2).
+
+**Arduino Due (beta – not yet tested on a board):** own firmware in [`firmware_due/`](firmware_due/) (PlatformIO, Arduino SAM core), same logic and
+USB protocol as the AVR boards – the configuration tool and DOF see no difference. The board is connected via the
+**native USB port** (not the programming port) and shows up as LWCloneU2 (three HID interfaces) plus a COM port for
+DOF. The configuration lives in the last kilobyte of flash (bank 1) instead of EEPROM and survives firmware updates
+through the web flasher. D0/D1 go to the 16U2 and are reserved. **All pins are 3.3 V** – 5 V driver boards and
+WS2812 strips usually need a level shifter (e.g. 74HCT125). Flashing goes through the ROM bootloader SAM-BA (web
+flasher, `bossac` or `pio run -t upload`). Firmware and flashing path are new and unverified – please report back
+as a GitHub issue, the flasher's log window helps.
 
 ## Quick start
 
@@ -465,6 +512,8 @@ and no strip are configured (except on the Breakout 32U2).
      the 16U2 via DFU (Atmel FLIP / `dfu-programmer`) with `arduino_mega2560__m16u2.hex`.
    - Uno: `avrdude -c arduino -p m328p -P COMx -U flash:w:arduino_uno__m328.hex:i`, then the USB chip via DFU:
      Uno R3 (16U2) with `arduino_uno__m16u2.hex`, Uno R1/R2 (8U2) with `arduino_uno__m8u2.hex`.
+   - Due *(beta)*: connect the native port, ERASE + RESET (or 1200 baud touch), then
+     `bossac -p COMx -e -w -v -b arduino_due.bin -R`.
 2. **Configure:** open the [configuration tool](https://cyclemat.github.io/lwcloneu2/config.html) in Microsoft Edge
    or Google Chrome, "Connect", assign pins, "Save". Details further below.
 3. **LED-Wiz software:** put `ledwiz.dll` (x86 for 32-bit programs, x64 for 64-bit) next to the application or
@@ -477,6 +526,9 @@ Atmel FLIP or the Arduino IDE. The page uses **Web Serial** (for the Arduino boo
 bootloaders of the USB chips); it lives in [`docs/`](docs/) and can also be opened locally.
 **Beta:** the procedures follow the protocols of avrdude, Caterina, optiboot, stk500boot and dfu-programmer but have
 not been tested on real hardware yet – please report back via an issue including the page's log text.
+**Arduino Due (beta):** the flasher additionally speaks the SAM-BA protocol of the ROM bootloader (like `bossac`) via
+Web Serial – chip check, page-wise writing, read-back, boot flag, reset. The stored configuration is preserved. This
+path is untested as well.
 
 ### Requirements
 
@@ -676,11 +728,11 @@ Sequence: any number of SET/FILL, then SHOW, then wait for the reply, then the n
 strip is written interrupts are blocked (~30 µs per pixel), and on the Mega/Uno the internal UART can lose reports
 during that time. Rule of thumb: 64 pixels ≈ 32 reports ≈ 30–40 frames/s.
 
-### Driving the LED strip directly from DOF (Leonardo / Pro Micro)
+### Driving the LED strip directly from DOF (Leonardo / Pro Micro / Due)
 
 The DirectOutput Framework only knows serial controllers for addressable strips (TeensyStripController, Wemos).
-That is why the LWCloneU2 on the **ATmega32U4** additionally shows up as a **virtual COM port** ("USB Serial Device",
-no driver on Windows 10/11) and speaks the TeensyStripController protocol there with one channel. DOF needs no
+That is why the LWCloneU2 on the **ATmega32U4** and on the **Due** additionally shows up as a **virtual COM port**
+("USB Serial Device", no driver on Windows 10/11) and speaks the TeensyStripController protocol there with one channel. DOF needs no
 change – in `Cabinet.xml`:
 
 ```xml
@@ -751,13 +803,16 @@ application. It needs Windows 10 or newer (Universal C Runtime). `testapp.exe` s
 Firmware: `avr-gcc` + `avr-libc` → `cd firmware && ./build.sh` (all boards, no make needed, output in
 `firmware/build/`) or `make` with the LUFA makefiles; `./publish.sh` copies the hex files and `manifest.json` to
 `release/`, which the web flasher downloads from.
+Arduino Due (beta): `cd firmware_due && pio run` (PlatformIO, platform `atmelsam`, Arduino SAM core is downloaded on the
+first build) → `.pio/build/due/firmware.bin`; `pio run -t upload` flashes via the native port. The shared modules
+(protocol, configuration, outputs, panel, strip) are compiled unchanged from `firmware/` (`firmware_due/shared.py`).
 Windows: `cmake -S win32 -B build-x86 -A Win32 && cmake --build build-x86 --config Release` (MSVC) or with
 LLVM-MinGW/MinGW-w64 via `-G Ninja -DCMAKE_CXX_COMPILER=...`. Output in `win32/bin/<arch>/`.
 
 ## Code layout
 
-See the tree above (`docs/` = web page with flasher and configuration tool, `old/` = unchanged upstream snapshot
-from August 2023 for reference). To add a board: a folder with `hwconfig.h` (timer 0 = soft PWM, timer 1 = clock, ADC, UART),
+See the tree above (`docs/` = web page with flasher and configuration tool, `firmware_due/` = Arduino Due port
+reusing the shared modules, `old/` = unchanged upstream snapshot from August 2023 for reference). To add a board: a folder with `hwconfig.h` (timer 0 = soft PWM, timer 1 = clock, ADC, UART),
 `pinmap.h` (`BOARD_ID`, `BOARD_PIN_TABLE`, `WS2812_MAX_PIXELS`, factory defaults), `devconfig.h`, `makefile`; add
 the board id to `pins.h` and the pin names to the tool (`BOARDS`). Protocol: [`firmware/proto.h`](firmware/proto.h),
 data layout: [`firmware/config.h`](firmware/config.h).

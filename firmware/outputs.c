@@ -31,8 +31,10 @@
 
 #include <string.h>
 #include <stdint.h>
+#if defined(__AVR__)
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#endif
 #include <util/atomic.h>
 
 #include <hwconfig.h>
@@ -41,12 +43,17 @@
 #include "outputs.h"
 
 
-#if !defined(LED_TIMER_vect)
+/* AVR: der Timer-Interrupt LED_TIMER_vect ruft outputs_tick(). Andere MCUs (OUTPUTS_TICK_EXTERNAL,
+ * z. B. firmware_due/) rufen outputs_tick() aus ihrem eigenen 200-µs-Timer.
+ * AVR: the LED_TIMER_vect timer interrupt calls outputs_tick(). Other MCUs (OUTPUTS_TICK_EXTERNAL,
+ * e.g. firmware_due/) call outputs_tick() from their own 200 µs timer. */
+#if !defined(LED_TIMER_vect) && !defined(OUTPUTS_TICK_EXTERNAL)
 
 void outputs_init(void) {}
 void outputs_apply_config(void) {}
 void outputs_ledwiz_report(const uint8_t *p8bytes) { (void)p8bytes; }
 uint8_t outputs_get_level(uint8_t index) { (void)index; return 0; }
+void outputs_tick(void) {}
 
 #else
 
@@ -150,10 +157,13 @@ static uint8_t level_of(uint8_t enable, uint8_t mode, uint16_t t)
 }
 
 
-ISR(LED_TIMER_vect)
+static int8_t   s_counter = 0;
+static uint16_t s_t = 0;
+
+void outputs_tick(void)
 {
-	static int8_t counter = 0;
-	static uint16_t t = 0;
+	int8_t counter = s_counter;
+	uint16_t t = s_t;
 
 	counter--;
 
@@ -175,12 +185,19 @@ ISR(LED_TIMER_vect)
 		gpio_out_t const * const g = &s_gpio[i];
 		uint8_t const on = (uint8_t)((s_pwm[g->idx] > (uint8_t)counter) ? 0xFF : 0x00) ^ g->inv;
 
-		if (on)
-			*g->io.port |= g->io.mask;
-		else
-			*g->io.port &= (uint8_t)~g->io.mask;
+		pins_write(&g->io, on);
 	}
+
+	s_counter = counter;
+	s_t = t;
 }
+
+#if defined(LED_TIMER_vect)
+ISR(LED_TIMER_vect)
+{
+	outputs_tick();
+}
+#endif
 
 
 void outputs_apply_config(void)

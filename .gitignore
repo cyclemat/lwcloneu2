@@ -37,3 +37,5 @@ firmware/**/*.hex
 .vs/
 .vscode/
 *.swp
+
+firmware_due/.pio/

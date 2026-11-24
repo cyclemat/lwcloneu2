@@ -1,13 +1,14 @@
 {
   "version": "2.1", "proto": 2, "date": "2026-11-24",
   "files": {
-    "arduino_leonardo.hex": 41193,
+    "arduino_leonardo.hex": 41164,
     "arduino_mega2560__m16u2.hex": 16099,
-    "arduino_mega2560__m2560.hex": 25958,
-    "arduino_promicro.hex": 41168,
+    "arduino_mega2560__m2560.hex": 25929,
+    "arduino_promicro.hex": 41152,
     "arduino_uno__m16u2.hex": 15510,
-    "arduino_uno__m328.hex": 24927,
+    "arduino_uno__m328.hex": 24898,
     "arduino_uno__m8u2.hex": 15510,
-    "breakout_32u2.hex": 30716
+    "breakout_32u2.hex": 30687,
+    "arduino_due.bin": 34204
   }
 }

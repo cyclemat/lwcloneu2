@@ -107,9 +107,35 @@ Stand: 24.11.2026
   `strip.c`; 'A' auf `O` erst nach dem Senden (wie STRIP_SHOW). In der Cabinet.xml: `<TeensyStripController>` mit
   `ComPortName` und `NumberOfLedsStrip1`. Blockierendes Warten des Teensy-Codes nicht übernehmen (Zustandsautomat).
 
+## Arduino Due (24.11.2026, Nutzerwunsch „komplett neue Firmware … im gleichen Projekt“)
+- Weg gewählt: **nativer USB-Port** mit Arduino-SAM-Core (PlatformIO `atmelsam@9.0.0`, Board-JSON `boards/lwc_due.json`
+  wegen VID/PID/Produktname; `debug`-Block ist Pflicht, sonst „Missed J-Link Device ID“). Projekt `firmware_due/`.
+- **Gemeinsame Module wiederverwendet** statt kopiert: `shared.py` (PRE-Skript! sonst „main program already constructed“)
+  kompiliert proto/config/outputs/panel/strip/strip_serial aus `../firmware` mit. Dafür in den AVR-Quellen portabel
+  gemacht: `pins.h` (`pin_io_t` je Plattform + `pins_read/pins_write`), `outputs_tick()` (ISR nur bei LED_TIMER_vect,
+  sonst OUTPUTS_TICK_EXTERNAL), panel.c ADC über `ADC_select/ADC_read` auf Nicht-AVR, `<avr/io.h>` nur unter `__AVR__`.
+  AVR-Builds danach identisch groß (Leonardo 14628 B).
+- Ersatz-Header nur für `<util/atomic.h>` (PRIMASK + cleanup-Attribut), `<avr/eeprom.h>`, `<avr/io.h>`; **nicht**
+  `avr/pgmspace.h`/`interrupt.h` – die liefert der SAM-Core selbst (WString.cpp braucht seine Fassung).
+- USB: Der SAM-Core fragt vor jedem Deskriptor die PluggableUSB-Module → `usb_lwz.cpp` liefert den **Gerätedeskriptor
+  selbst** (EF/02/01, VID FAFA, PID F0+ID, bcdDevice/Serial wie descriptors.c). ID wird in `initVariant()` (weak im
+  Core, läuft vor `USBDevice.attach()`) aus dem Flash gelesen. Output-Reports kommen als SET_REPORT im USB-Interrupt →
+  Ringpuffer → Hauptschleife. IN-Senden nur wenn TXINI (UDD_Send blockiert sonst). Due läuft **High-Speed** →
+  bInterval in Mikroframes (4 = 1 ms). DOF öffnet ohne DTR → `lwz_cdc_send` direkt auf CDC_TX statt SerialUSB.write.
+- EEPROM-Ersatz: 1 KB bei IFLASH1_ADDR+IFLASH1_SIZE−1024, eigener EEFC-Befehl aus `.ramfunc` (CLB + EWP je Seite),
+  Firmware läuft aus Bank 0. Layout wie AVR (ID bei 16, Konfig ab 64). CMSIS des Cores kennt DWT nicht → Register
+  direkt (0xE0001000/04, DEMCR 0xE000EDFC) im WS2812-Treiber.
+- Ergebnis: 31,5 KB Flash, 6,3 KB RAM, keine eigenen Warnungen. Befehl 66 → `banzai()` (GPNVM1 löschen) → SAM-BA.
+- Flasher: SAM-BA-Monitorprotokoll in JS (N#, V#, w/W/o/R, EEFC über W auf FCR + Polling FSR, CLB-Unlock je 64 Seiten,
+  EWP je Seite mit 64 W-Befehlen in einem write(), Verify mit o+R wegen Zweierpotenz-Bug, SGPB 1, RSTC A500000D).
+  Nicht an Hardware getestet; Risiken: W-Durchsatz des ROM-Monitors, Latch-Schreiben per Einzelwort (bossac nutzt
+  WordCopy-Applet – laut Datenblatt reichen 32-Bit-Schreibzugriffe).
+- Tool: BOARDS[6] (74 Namen), `bit: b & 0x7F`. publish.sh kopiert `arduino_due.bin`; Workflow-Job `due` (pio).
+
 ## Offen
 - An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno,
-  Online-Flasher (alle 4 Protokolle), Bootloader-Befehl 66 (Caterina-Schlüssel, DFU-Sprung).
+  Online-Flasher (alle 5 Protokolle inkl. SAM-BA), Bootloader-Befehl 66 (Caterina-Schlüssel, DFU-Sprung, Due → SAM-BA),
+  Due komplett (Enumeration mit eigenem Gerätedeskriptor, Flash-Schreiben der Konfiguration, DWT-Timing, CDC ohne DTR).
 - GitHub Actions nur `workflow_dispatch` – erster Lauf nach Push auf Ansage des Nutzers.
 - **Pages-Panne 24.11.2026:** die ersten beiden Pages-Builds (13:46, 13:51 UTC) scheiterten mit
   „No url found for submodule path 'firmware/lufa' in .gitmodules“: `firmware/lufa` stand im Index noch als Gitlink

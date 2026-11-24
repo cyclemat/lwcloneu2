@@ -31,7 +31,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#if defined(__AVR__)
 #include <avr/io.h>
+#endif
 
 #define PIN_NO_ADC   0xFF
 
@@ -43,6 +45,7 @@ enum {
 	BOARD_ARDUINO_MEGA2560 = 3,  /* ATmega2560 hinter ATmega16U2 / behind ATmega16U2 */
 	BOARD_ARDUINO_UNO      = 4,  /* ATmega328P hinter ATmega8U2/16U2 / behind ATmega8U2/16U2 */
 	BOARD_BREAKOUT_32U2    = 5,  /* eigenes Breakout mit ATmega32U2 / custom breakout */
+	BOARD_ARDUINO_DUE      = 6,  /* SAM3X8E (ARM Cortex-M3), nativer USB-Port, firmware_due/ / native USB port */
 };
 
 /* Port-Buchstaben als Index / port letters as index */
@@ -54,6 +57,8 @@ typedef struct {
 	uint8_t bit;      /* 0..7 */
 	uint8_t adc_mux;  /* ADMUX-Wert oder PIN_NO_ADC */
 } pin_def_t;
+
+#if defined(__AVR__)
 
 /* Aufgelöster Pin für schnellen Zugriff im Betrieb. Bei allen AVR8 liegen PINx, DDRx, PORTx
  * direkt hintereinander, daher reicht die PORTx-Adresse.
@@ -67,6 +72,33 @@ typedef struct {
 #define PIN_REG_PORT(io)  ((io)->port)
 #define PIN_REG_DDR(io)   ((io)->port - 1)
 #define PIN_REG_PIN(io)   ((io)->port - 2)
+
+static inline uint8_t pins_read(const pin_io_t *io) { return (*PIN_REG_PIN(io) & io->mask) ? 1 : 0; }
+static inline void pins_write(const pin_io_t *io, uint8_t on)
+{
+	if (on) *PIN_REG_PORT(io) |= io->mask;
+	else    *PIN_REG_PORT(io) &= (uint8_t)~io->mask;
+}
+
+#else
+
+/* ARM (SAM3X, firmware_due/): reg zeigt auf PIO_SODR des Ports; dahinter liegen PIO_CODR (+4),
+ * PIO_ODSR (+8) und PIO_PDSR (+12). Setzen/Löschen über SODR/CODR ist atomar – kein Lesen-Ändern-Schreiben.
+ * ARM (SAM3X, firmware_due/): reg points to the port's PIO_SODR; PIO_CODR (+4), PIO_ODSR (+8) and
+ * PIO_PDSR (+12) follow. Set/clear via SODR/CODR is atomic – no read-modify-write. */
+typedef struct {
+	volatile uint32_t *reg;  /* &PIO_SODR */
+	uint32_t mask;
+} pin_io_t;
+
+static inline uint8_t pins_read(const pin_io_t *io) { return (io->reg[3] & io->mask) ? 1 : 0; }
+static inline void pins_write(const pin_io_t *io, uint8_t on)
+{
+	if (on) io->reg[0] = io->mask;
+	else    io->reg[1] = io->mask;
+}
+
+#endif
 
 uint8_t pins_count(void);
 bool    pins_get(uint8_t index, pin_def_t *def);            /* false wenn Index ungültig / if index invalid */

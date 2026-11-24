@@ -119,6 +119,10 @@ a { color: var(--blue); }
       <div class="body" data-i18n-html="g_d6b"></div>
     </details>
     <details>
+      <summary data-i18n="g_d8">Arduino Due (BETA): nativer USB-Port und ROM-Bootloader (3,3 V!)</summary>
+      <div class="body" data-i18n-html="g_d8b"></div>
+    </details>
+    <details>
       <summary data-i18n="g_d7">Fehlersuche</summary>
       <div class="body" data-i18n-html="g_d7b"></div>
     </details>
@@ -134,6 +138,7 @@ a { color: var(--blue); }
         <option value="uno8">Arduino Uno R1/R2 (ATmega328P + ATmega8U2)</option>
         <option value="mega">Arduino Mega 2560 (ATmega2560 + ATmega16U2)</option>
         <option value="breakout">Breakout-Board ATmega32U2</option>
+        <option value="due">Arduino Due (SAM3X8E, nativer USB-Port, 3,3 V) – BETA</option>
       </select>
       <span class="hint grow" id="boardhint"></span>
     </div>
@@ -164,8 +169,8 @@ a { color: var(--blue); }
   </div>
 
   <div class="card">
-    <h2 data-i18n="dltitle">Hex-Dateien zum Herunterladen</h2>
-    <div class="hint" data-i18n="dlhint">Für avrdude, Atmel FLIP, dfu-programmer oder einen ISP-Programmer. Befehle stehen in der README.</div>
+    <h2 data-i18n="dltitle">Firmware-Dateien zum Herunterladen</h2>
+    <div class="hint" data-i18n="dlhint">Für avrdude, Atmel FLIP, dfu-programmer, bossac (Due) oder einen ISP-Programmer. Befehle stehen in der README.</div>
     <ul id="dllist" style="margin:8px 0 0; padding-left:18px; font-size:13.5px"></ul>
   </div>
 </main>
@@ -183,8 +188,18 @@ const I18N = {
     hidhint:'Läuft auf dem Board bereits eine LWCloneU2-Firmware, meldet es sich nur als HID-Gerät und hat keinen seriellen Port. Dieser Knopf schickt den Befehl „Bootloader“ (wie im Konfigurations-Tool): Leonardo/Pro Micro erscheinen dann 8 Sekunden lang als serieller Port, 8U2/16U2/32U2 als DFU-Gerät.',
     hidbtn:'Gerät wählen und Bootloader starten', logtitle:'Protokoll', clearlog:'Leeren',
     loghint:'Bei Problemen diesen Text in einen GitHub-Issue kopieren.',
-    dltitle:'Hex-Dateien zum Herunterladen', dlhint:'Für avrdude, Atmel FLIP, dfu-programmer oder einen ISP-Programmer. Befehle stehen in der README.',
+    dltitle:'Firmware-Dateien zum Herunterladen', dlhint:'Für avrdude, Atmel FLIP, dfu-programmer, bossac (Due) oder einen ISP-Programmer. Befehle stehen in der README.',
     fw:'Firmware {v} vom {d}', fwfail:'manifest.json nicht ladbar – nur eigene Hex-Dateien möglich',
+    st_touch_due:'Board wurde in den Bootloader geschickt. Jetzt den Port „Bossa Program Port“ wählen (erscheint als neuer Port, kein Zeitlimit).',
+    hid_hint_due:'Jetzt oben „Port wählen und flashen“ klicken und den Port „Bossa Program Port“ wählen.',
+    boardhint_due:'BETA – ARM-Chip (3,3 V), ROM-Bootloader SAM-BA über den nativen USB-Port.',
+    warn_due_beta:'BETA: Die Due-Firmware und das Flashen über SAM-BA sind neu und noch an keinem echten Board getestet. Es kann sein, dass das Flashen abbricht oder das Board sich danach nicht meldet. Nichts davon ist gefährlich – der ROM-Bootloader lässt sich jederzeit mit ERASE + RESET wieder starten und der Due mit der Arduino-IDE zurücksetzen. Rückmeldungen (Protokoll unten) bitte als GitHub-Issue.',
+    warn_due33:'Der Due arbeitet mit 3,3 V: Ausgänge liefern höchstens 3,3 V, Eingänge vertragen keine 5 V. Für 5-V-Treiberplatinen und WS2812-Strips ist meist ein Pegelwandler nötig.',
+    ht_due_boot:'Nativen USB-Port anschließen und in den Bootloader bringen',
+    hb_due_boot:'<ul><li>Den <b>nativen USB-Port</b> benutzen (die Buchse näher am Reset-Taster, Aufdruck „Native USB“), nicht den Programming-Port.</li><li><b>Neues Board oder Arduino-Sketch darauf:</b> einfach weiter – der Flasher startet den ROM-Bootloader selbst über den seriellen Port (1200-Baud-Trick wie die Arduino-IDE). Erscheint danach noch einmal der Port-Dialog, „Bossa Program Port“ wählen.</li><li><b>LWCloneU2 läuft schon darauf:</b> unten „Bootloader per USB-HID starten“ – oder den Trick von oben, das Board hat ja weiter einen COM-Port.</li><li><b>Von Hand:</b> Taste <b>ERASE</b> eine Sekunde halten, loslassen, <b>RESET</b> drücken. Achtung: ERASE löscht den ganzen Flash, also auch die gespeicherte Konfiguration – die beiden Wege oben lassen sie stehen.</li><li>Der ROM-Bootloader (SAM-BA) läuft ohne Zeitlimit.</li></ul>',
+    hb_due_flash:'<p>„Port wählen und flashen“ klicken und „Bossa Program Port“ wählen (oder den Arduino-Due-Port, wenn noch ein Sketch läuft – dann kommt der Dialog nach dem Neustart noch einmal). Der Flasher prüft die Chip-Kennung (SAM3X8E), schreibt die Firmware seitenweise (256 Byte), liest sie zurück, setzt das Boot-Flag (GPNVM1) und startet das Board neu – etwa 20–40 s. Die gespeicherte Konfiguration am Ende des Flashs bleibt erhalten. Danach meldet sich das Board als <b>LWCloneU2</b> (HID) plus einem COM-Port für DOF.</p>',
+    g_d8:'Arduino Due (BETA): nativer USB-Port und ROM-Bootloader (3,3 V!)',
+    g_d8b:'<p><b>Beta:</b> Firmware und Flash-Weg für den Due sind neu und noch nicht an Hardware getestet – bitte Rückmeldung geben.</p><p>Der Due hat einen ARM-Chip (SAM3X8E, 84 MHz, 3,3 V) und <b>zwei USB-Buchsen</b>: den Programming-Port (über einen ATmega16U2, nur zum Hochladen von Sketches) und den <b>nativen Port</b> direkt am SAM3X. LWCloneU2 läuft am nativen Port – dort erscheint das Board als HID-Gerät und zusätzlich als COM-Port für DOF.</p><ol><li><b>Bootloader:</b> Der SAM3X hat den Bootloader <b>SAM-BA</b> fest im ROM; er startet, wenn das Boot-Flag (GPNVM1) gelöscht ist. Das macht die Arduino-IDE mit dem 1200-Baud-Trick, die Taste ERASE oder der HID-Knopf unten. Der Bootloader meldet sich als serieller Port „Bossa Program Port“ und läuft, bis das Board neu gestartet wird.</li><li><b>Flashen:</b> Die Seite spricht das SAM-BA-Protokoll direkt (wie bossac), prüft die Chip-ID, schreibt und liest jede 256-Byte-Seite und setzt zum Schluss das Boot-Flag wieder. Nur die Seiten der Firmware werden beschrieben – die Konfiguration am Flash-Ende (ersetzt das EEPROM) bleibt erhalten, sofern nicht ERASE gedrückt wurde.</li><li><b>3,3 V:</b> Alle Pins liefern und vertragen nur 3,3 V. Für 5-V-Logik (viele Treiberplatinen, WS2812) ein Pegelwandler (z. B. 74HCT125) verwenden. Dafür gibt es 54 digitale Pins, 12 Analogeingänge und viel RAM.</li><li><b>Windows:</b> „Bossa Program Port“ bekommt ab Windows 10 den Standard-CDC-Treiber; unter Windows 7 bringt die Arduino-IDE den Treiber mit.</li></ol><p>Zurück zum normalen Due: einfach einen Sketch über den nativen Port hochladen (die IDE nutzt denselben Trick) oder ERASE + RESET und dann wie gewohnt hochladen.</p>',
     ownhex:'Eigene Hex-Datei statt der mitgelieferten:', usingown:'eigene Datei: {f}', usingbundled:'mitgeliefert: {f} ({k} KB)',
     flash_serial:'Port wählen und flashen', flash_dfu:'DFU-Gerät wählen und flashen', flash_boot:'Bootloader-Port wählen und flashen',
     hid_ok:'Befehl gesendet – das Gerät startet jetzt den Bootloader.', hid_none:'Kein LWCloneU2 gefunden oder Dialog abgebrochen.',
@@ -241,8 +256,18 @@ const I18N = {
     hidhint:'If the board already runs an LWCloneU2 firmware it only shows up as an HID device and has no serial port. This button sends the “bootloader” command (same as in the configuration tool): Leonardo/Pro Micro then appear as a serial port for 8 seconds, 8U2/16U2/32U2 as a DFU device.',
     hidbtn:'Choose device and start bootloader', logtitle:'Log', clearlog:'Clear',
     loghint:'If something fails, paste this text into a GitHub issue.',
-    dltitle:'Hex files for download', dlhint:'For avrdude, Atmel FLIP, dfu-programmer or an ISP programmer. Commands are in the README.',
+    dltitle:'Firmware files for download', dlhint:'For avrdude, Atmel FLIP, dfu-programmer, bossac (Due) or an ISP programmer. Commands are in the README.',
     fw:'Firmware {v} from {d}', fwfail:'manifest.json not loadable – only your own hex files are possible',
+    st_touch_due:'Board was sent to the bootloader. Now choose the “Bossa Program Port” (appears as a new port, no time limit).',
+    hid_hint_due:'Now click “Choose port and flash” above and pick the “Bossa Program Port”.',
+    boardhint_due:'BETA – ARM chip (3.3 V), ROM bootloader SAM-BA via the native USB port.',
+    warn_due_beta:'BETA: the Due firmware and flashing via SAM-BA are new and not yet tested on a real board. Flashing may abort or the board may not show up afterwards. None of this is dangerous – the ROM bootloader can always be started again with ERASE + RESET and the Due restored with the Arduino IDE. Please report back (log below) as a GitHub issue.',
+    warn_due33:'The Due runs on 3.3 V: outputs deliver at most 3.3 V, inputs do not tolerate 5 V. For 5 V driver boards and WS2812 strips a level shifter is usually needed.',
+    ht_due_boot:'Connect the native USB port and enter the bootloader',
+    hb_due_boot:'<ul><li>Use the <b>native USB port</b> (the socket closer to the reset button, labelled “Native USB”), not the programming port.</li><li><b>New board or an Arduino sketch on it:</b> just continue – the flasher starts the ROM bootloader itself via the serial port (1200 baud touch like the Arduino IDE). If the port dialog appears again, pick “Bossa Program Port”.</li><li><b>LWCloneU2 already running:</b> use “Start the bootloader via USB HID” below – or the touch above, the board still has a COM port.</li><li><b>By hand:</b> hold <b>ERASE</b> for a second, release, press <b>RESET</b>. Note: ERASE wipes the whole flash including the stored configuration – the two ways above keep it.</li><li>The ROM bootloader (SAM-BA) runs without a time limit.</li></ul>',
+    hb_due_flash:'<p>Click “Choose port and flash” and pick “Bossa Program Port” (or the Arduino Due port if a sketch is still running – the dialog then comes back after the reset). The flasher checks the chip id (SAM3X8E), writes the firmware page by page (256 bytes), reads it back, sets the boot flag (GPNVM1) and restarts the board – about 20–40 s. The stored configuration at the end of the flash is preserved. The board then shows up as <b>LWCloneU2</b> (HID) plus a COM port for DOF.</p>',
+    g_d8:'Arduino Due (BETA): native USB port and ROM bootloader (3.3 V!)',
+    g_d8b:'<p><b>Beta:</b> firmware and flashing path for the Due are new and not yet tested on hardware – please report back.</p><p>The Due has an ARM chip (SAM3X8E, 84 MHz, 3.3 V) and <b>two USB sockets</b>: the programming port (through an ATmega16U2, only for uploading sketches) and the <b>native port</b> directly on the SAM3X. LWCloneU2 runs on the native port – there the board shows up as an HID device plus a COM port for DOF.</p><ol><li><b>Bootloader:</b> the SAM3X has the <b>SAM-BA</b> bootloader fixed in ROM; it starts when the boot flag (GPNVM1) is cleared. The Arduino IDE does that with the 1200 baud touch, so do the ERASE button or the HID button below. The bootloader shows up as the serial port “Bossa Program Port” and runs until the board is reset.</li><li><b>Flashing:</b> the page speaks the SAM-BA protocol directly (like bossac), checks the chip id, writes and reads back every 256 byte page and finally sets the boot flag again. Only the firmware pages are written – the configuration at the end of the flash (replacing the EEPROM) is preserved unless ERASE was pressed.</li><li><b>3.3 V:</b> all pins deliver and tolerate 3.3 V only. For 5 V logic (many driver boards, WS2812) use a level shifter (e.g. 74HCT125). In return you get 54 digital pins, 12 analog inputs and plenty of RAM.</li><li><b>Windows:</b> “Bossa Program Port” gets the standard CDC driver from Windows 10 on; on Windows 7 the Arduino IDE ships the driver.</li></ol><p>Back to a normal Due: just upload a sketch via the native port (the IDE uses the same touch) or ERASE + RESET and upload as usual.</p>',
     ownhex:'Use your own hex file instead of the bundled one:', usingown:'own file: {f}', usingbundled:'bundled: {f} ({k} KB)',
     flash_serial:'Choose port and flash', flash_dfu:'Choose DFU device and flash', flash_boot:'Choose bootloader port and flash',
     hid_ok:'Command sent – the device is starting its bootloader.', hid_none:'No LWCloneU2 found or dialog cancelled.',
@@ -314,7 +339,13 @@ const BOARDS = {
   uno8:     { hint:'boardhint_uno', warn:['warn_uno','warn_order'], back:'UNO-dfu_and_usbserial_combined.hex', steps:[ {kind:'flash', h:'ht_uno_main', b:'hb_uno_main', method:'stk500v1', mcu:'atmega328p', file:'arduino_uno__m328.hex', role:'role_main'}, {kind:'flash', h:'ht_dfu', b:'hb_dfu_arduino', driver:true, method:'dfu', mcu:'atmega8u2', file:'arduino_uno__m8u2.hex', role:'role_usb'} ] },
   mega:     { hint:'boardhint_mega', warn:['warn_order'], back:'MEGA2560-dfu_and_usbserial_combined.hex', steps:[ {kind:'flash', h:'ht_uno_main', b:'hb_uno_main', method:'stk500v2', mcu:'atmega2560', file:'arduino_mega2560__m2560.hex', role:'role_main'}, {kind:'flash', h:'ht_dfu', b:'hb_dfu_arduino', driver:true, method:'dfu', mcu:'atmega16u2', file:'arduino_mega2560__m16u2.hex', role:'role_usb'} ] },
   breakout: { hint:'boardhint_breakout', steps:[ {kind:'flash', h:'ht_dfu', b:'hb_dfu_breakout', driver:true, method:'dfu', mcu:'atmega32u2', file:'breakout_32u2.hex', role:'role_usb'} ] },
+  due:      { hint:'boardhint_due', warn:['warn_due_beta','warn_due33'], steps:[ {kind:'text', h:'ht_due_boot', b:'hb_due_boot'}, {kind:'flash', h:'ht_flash', b:'hb_due_flash', method:'samba', mcu:'sam3x8e', file:'arduino_due.bin', bin:true, role:'role_usb'} ] },
 };
+/* SAM3X (Due): ROM-Bootloader SAM-BA, Flash ab 0x80000 in 256-Byte-Seiten, zwei Bänke à 256 KB (EFC0/EFC1)
+ * SAM3X (Due): ROM bootloader SAM-BA, flash from 0x80000 in 256 byte pages, two 256 KB banks (EFC0/EFC1) */
+const SAMBA = { CHIPID:0x400E0940, EFC_FCR:[0x400E0A04, 0x400E0C04], EFC_FSR:[0x400E0A08, 0x400E0C08], RSTC_CR:0x400E1A00,
+                FLASH:0x80000, PAGE:256, BANK_PAGES:1024, SIZE:524288, CFG_RESERVED:1024 };
+const SAM3X_IDS = { 0x285E0A60:'ATSAM3X8E', 0x286E0A60:'ATSAM3X8H', 0x285B0960:'ATSAM3X8C', 0x285E0960:'ATSAM3X4E (256 KB)', 0x285B0760:'ATSAM3X4C (256 KB)' };
 let manifest = null;
 let touchPending = null;   // nach 1200-Baud-Trick / after 1200 baud touch: {boardId, idx}
 const ownFiles = {};   // step index -> {name, text}
@@ -365,7 +396,7 @@ function renderBoard() {
       html += `<div class="row" style="margin-top:8px"><span class="badge">${t(s.role)}: <span class="chip">${s.mcu}</span></span>
         <button class="primary" data-step="${i}" ${busy ? 'disabled' : ''}>${t(s.method === 'dfu' ? 'flash_dfu' : (touchPending && touchPending.boardId === id && touchPending.idx === i) ? 'flash_boot' : 'flash_serial')}</button>
         <span class="filebox grow">${fileinfo}</span></div>
-        <div class="row filebox" style="margin-top:6px"><span>${t('ownhex')}</span><input type="file" accept=".hex,.ihx,.eep" data-own="${i}"></div>`;
+        <div class="row filebox" style="margin-top:6px"><span>${t('ownhex')}</span><input type="file" accept=".hex,.ihx,.eep${s.bin ? ',.bin' : ''}" data-own="${i}"></div>`;
     }
     d.innerHTML = html; card.appendChild(d);
   });
@@ -374,7 +405,7 @@ function renderBoard() {
   card.querySelectorAll('button[data-step]').forEach(btn => btn.onclick = () => startFlash(id, +btn.dataset.step));
   card.querySelectorAll('input[data-own]').forEach(inp => inp.onchange = async () => {
     const f = inp.files[0]; if (!f) { delete ownFiles[id + inp.dataset.own]; renderBoard(); return; }
-    ownFiles[id + inp.dataset.own] = { name: f.name, text: await f.text() }; renderBoard();
+    ownFiles[id + inp.dataset.own] = { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }; renderBoard();
   });
 }
 document.getElementById('board').onchange = renderBoard;
@@ -628,15 +659,110 @@ async function dfuFlash(dfu, img, mcu) {
   try { await dfu.out(DFU.DNLOAD, []); } catch (e) {}   // Gerät trennt sich hier / device detaches here
 }
 
+/* ---------------------------------------------------------------- SAM-BA (Arduino Due, ROM-Bootloader über den nativen USB-Port) */
+/*
+ * Protokoll des SAM-BA-Monitors im ROM (wie bossac): "N#" Binärmodus, "V#" Version, "w<addr>,4#" Wort lesen (4 Byte
+ * binär), "W<addr>,<val>#" Wort schreiben, "o<addr>,#" Byte lesen, "R<addr>,<n>#" n Bytes lesen. Flash-Seiten werden
+ * als 64 Wörter in den Latch-Puffer (die Flash-Adresse selbst) geschrieben, dann löst der EEFC-Befehl EWP
+ * (Erase page and write page) das Programmieren aus. Zum Schluss GPNVM1 setzen (Boot aus dem Flash) und Reset.
+ *
+ * Protocol of the ROM SAM-BA monitor (like bossac): "N#" binary mode, "V#" version, "w<addr>,4#" read word (4 bytes
+ * binary), "W<addr>,<val>#" write word, "o<addr>,#" read byte, "R<addr>,<n>#" read n bytes. Flash pages are written
+ * as 64 words into the latch buffer (the flash address itself), then the EEFC command EWP (erase page and write page)
+ * programs them. Finally set GPNVM1 (boot from flash) and reset.
+ */
+const enc = s => Array.from(s, c => c.charCodeAt(0));
+const h8 = v => (v >>> 0).toString(16).toUpperCase().padStart(8, '0');
+async function sambaProbe(ser) {
+  ser.flush(); await ser.write(enc('N#'));
+  const r = await ser.read(2, 500);
+  return r[0] === 0x0A && r[1] === 0x0D;
+}
+async function sambaVersion(ser) {
+  ser.flush(); await ser.write(enc('V#'));
+  const end = performance.now() + 800; let s = '';
+  while (performance.now() < end) { if (ser.buf.length) { s += String.fromCharCode(...ser.buf.splice(0)); if (/\n\r$/.test(s)) break; } await sleep(5); }
+  return s.trim();
+}
+async function sambaReadWord(ser, addr) {
+  ser.flush(); await ser.write(enc(`w${h8(addr)},4#`));
+  const r = await ser.read(4, 1000);
+  return (r[0] | (r[1] << 8) | (r[2] << 16) | (r[3] << 24)) >>> 0;
+}
+async function sambaWriteWord(ser, addr, val) { await ser.write(enc(`W${h8(addr)},${h8(val)}#`)); }
+async function sambaReadBytes(ser, addr, n) {
+  // Der ROM-Monitor liefert über USB bei Zweierpotenzen zu wenig – erstes Byte einzeln (so macht es auch bossac)
+  // the ROM monitor misbehaves over USB for power-of-two sizes – read the first byte separately (bossac does the same)
+  ser.flush(); await ser.write(enc(`o${h8(addr)},#`));
+  const out = [(await ser.read(1, 1000))[0]];
+  await ser.write(enc(`R${h8(addr + 1)},${h8(n - 1)}#`));
+  out.push(...await ser.read(n - 1, 3000));
+  return out;
+}
+async function efcCmd(ser, bank, cmd, arg) {
+  await sambaWriteWord(ser, SAMBA.EFC_FCR[bank], ((0x5A << 24) | (arg << 8) | cmd) >>> 0);
+  for (let i = 0; i < 300; i++) {
+    const s = await sambaReadWord(ser, SAMBA.EFC_FSR[bank]);
+    if (s & 1) { if (s & 6) throw new Error(`EFC-Fehler / error 0x${s.toString(16)} bei Befehl / at command 0x${cmd.toString(16)}`); return; }
+    await sleep(2);
+  }
+  throw new Error('EFC: Timeout');
+}
+async function sambaFlash(ser, img) {
+  log('SAM-BA: ' + (await sambaVersion(ser) || '(keine Versionsantwort / no version reply)'));
+  const cid = await sambaReadWord(ser, SAMBA.CHIPID); const name = SAM3X_IDS[cid];
+  log(`Chip-ID ${h8(cid)} → ${name || 'unbekannt / unknown'}`);
+  if (!name || !/8[EH]/.test(name)) throw new Error('falscher Chip / wrong chip: ' + h8(cid) + (name ? ' (' + name + ')' : ''));
+  if (img.length > SAMBA.SIZE - SAMBA.CFG_RESERVED) throw new Error(`Firmware zu groß / too large: ${img.length}`);
+  const data = padTo(img, SAMBA.PAGE); const pages = data.length / SAMBA.PAGE;
+  const bankOf = p => p >= SAMBA.BANK_PAGES ? 1 : 0, pageIn = p => p % SAMBA.BANK_PAGES;
+  log('Sperrregionen freigeben / unlocking regions …');
+  for (let p = 0; p < pages; p += 64) await efcCmd(ser, bankOf(p), 0x09, pageIn(p));          // CLB
+  log(`Schreiben / writing ${data.length} Byte (${pages} Seiten / pages) …`);
+  for (let p = 0; p < pages; p++) {
+    const base = p * SAMBA.PAGE; let cmds = '';
+    for (let i = 0; i < SAMBA.PAGE; i += 4) {
+      const v = data[base + i] | (data[base + i + 1] << 8) | (data[base + i + 2] << 16) | (data[base + i + 3] << 24);
+      cmds += `W${h8(SAMBA.FLASH + base + i)},${h8(v)}#`;
+    }
+    await ser.write(enc(cmds));                                                               // Latch-Puffer / latch buffer
+    await efcCmd(ser, bankOf(p), 0x03, pageIn(p));                                            // EWP
+    setProgress(0.05 + 0.6 * (p + 1) / pages);
+  }
+  log('Prüfen / verifying …');
+  for (let p = 0; p < pages; p++) {
+    const base = p * SAMBA.PAGE;
+    const r = await sambaReadBytes(ser, SAMBA.FLASH + base, SAMBA.PAGE);
+    if (!same(r, data.subarray(base, base + SAMBA.PAGE))) throw new Error(`Prüfung fehlgeschlagen bei / verify failed at 0x${(SAMBA.FLASH + base).toString(16)}`);
+    setProgress(0.65 + 0.33 * (p + 1) / pages);
+  }
+  log('Boot-Flag setzen (GPNVM1) und neu starten / setting boot flag and resetting …');
+  await efcCmd(ser, 0, 0x0B, 1);                                                              // SGPB 1
+  await sambaWriteWord(ser, SAMBA.RSTC_CR, 0xA500000D);
+  log('Board startet mit LWCloneU2 / board restarts with LWCloneU2.');
+}
+
 /* ---------------------------------------------------------------- Ablauf / flow */
+/* Datei → Speicherabbild: Intel-HEX (AVR, auch Due-HEX mit absoluten Adressen) oder rohes .bin (Due)
+ * file → memory image: Intel HEX (AVR, also Due hex with absolute addresses) or raw .bin (Due) */
+function loadImage(bytes, name, step) {
+  const isHex = /\.(hex|ihx|eep)$/i.test(name) || bytes[0] === 0x3A;
+  if (!isHex) {
+    if (!step.bin) throw new Error('Datei ist kein Intel-HEX / file is not Intel HEX: ' + name);
+    return bytes;
+  }
+  const img = parseHex(new TextDecoder().decode(bytes));
+  if (step.bin && img.length > SAMBA.FLASH) return img.subarray(SAMBA.FLASH);
+  return img;
+}
 async function getImage(boardId, step) {
   const own = ownFiles[boardId + step.idx];
-  if (own) { log(`Datei / file: ${own.name}`); return parseHex(own.text); }
+  if (own) { log(`Datei / file: ${own.name}`); return loadImage(own.bytes, own.name, step); }
   if (!manifest || manifest.files[step.file] == null) throw new Error('Firmware-Datei nicht verfügbar / not available: ' + step.file);
   const r = await fetch(releaseBase + step.file, { cache: 'no-cache' });
   if (!r.ok) throw new Error(`Download ${step.file}: HTTP ${r.status}`);
   log(`Datei / file: ${step.file} (Firmware ${manifest.version})`);
-  return parseHex(await r.text());
+  return loadImage(new Uint8Array(await r.arrayBuffer()), step.file, step);
 }
 
 async function startFlash(boardId, idx) {
@@ -649,7 +775,7 @@ async function startFlash(boardId, idx) {
     log(`Firmware ${img.length} Byte`);
     if (step.method === 'dfu') await runDfu(img, step.mcu);
     else await runSerial(img, step);
-    if (touchPending) { setStatus(t('st_touch')); setProgress(0.03); }
+    if (touchPending) { setStatus(t(step.method === 'samba' ? 'st_touch_due' : 'st_touch')); setProgress(0.03); }
     else { setProgress(1, 'ok'); setStatus(t('st_ok'), 'ok'); document.getElementById('nextstep').style.display = ''; }
   } catch (e) {
     log('FEHLER / ERROR: ' + (e.message || e)); setProgress(1, 'err'); setStatus(t('st_err', { e: e.message || e }), 'err');
@@ -661,6 +787,18 @@ async function runSerial(img, step) {
   let port; try { port = await navigator.serial.requestPort(); } catch (e) { throw new Error('kein Port gewählt / no port chosen'); }
   const info = port.getInfo(); log(`Port: VID ${info.usbVendorId != null ? hex2(info.usbVendorId >> 8) + hex2(info.usbVendorId & 255) : '?'} PID ${info.usbProductId != null ? hex2(info.usbProductId >> 8) + hex2(info.usbProductId & 255) : '?'}`);
   const ser = new Serial(port);
+  if (step.method === 'samba') {
+    await ser.open(115200);
+    let inBoot = false; try { inBoot = await sambaProbe(ser); } catch (e) {}
+    if (inBoot) { try { await sambaFlash(ser, img); } finally { await ser.close(); } return; }
+    // kein SAM-BA → 1200-Baud-Trick: Boot-Flag löschen und neu starten (Arduino-Core und LWCloneU2 machen das gleich)
+    // no SAM-BA → 1200 baud touch: clear the boot flag and reset (Arduino core and LWCloneU2 behave the same)
+    log('Kein SAM-BA-Bootloader am Port – starte den ROM-Bootloader per 1200-Baud-Trick / no SAM-BA on port – entering ROM bootloader via 1200 baud touch');
+    await ser.close(); await sleep(100);
+    await ser.open(1200); await ser.setSignals({ dataTerminalReady: false, requestToSend: false }); await sleep(100); await ser.close();
+    touchPending = { boardId: step.boardId, idx: step.idx }; log(t('st_touch_due'));
+    return;
+  }
   if (step.method === 'avr109') {
     await ser.open(57600);
     let id = null; try { id = await avr109Probe(ser); } catch (e) {}
@@ -702,7 +840,7 @@ document.getElementById('hidbtn').onclick = async () => {
   }
   if (!sent) { st.textContent = t('hid_none'); st.className = 'status err'; return; }
   const b = document.getElementById('board').value;
-  st.textContent = t('hid_ok') + ((b === 'leonardo' || b === 'promicro') ? ' ' + t('hid_hint32u4') : ''); st.className = 'status ok';
+  st.textContent = t('hid_ok') + ((b === 'leonardo' || b === 'promicro') ? ' ' + t('hid_hint32u4') : b === 'due' ? ' ' + t('hid_hint_due') : ''); st.className = 'status ok';
   log('HID: Bootloader-Befehl gesendet / bootloader command sent');
 };
 

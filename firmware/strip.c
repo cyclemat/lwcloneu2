@@ -14,7 +14,9 @@
 
 #include <string.h>
 #include <stdint.h>
+#if defined(__AVR__)
 #include <avr/io.h>
+#endif
 #include <util/atomic.h>
 
 #include <hwconfig.h>

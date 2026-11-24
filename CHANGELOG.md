@@ -43,6 +43,24 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
   Build switch `ENABLE_STRIP_SERIAL` (32U4 only). Untested on hardware.
 - Neues Firmware-Ziel `arduino_uno__m16u2` für den Uno R3 (16U2 statt 8U2: richtige Bootloader-Adresse).
   New firmware target `arduino_uno__m16u2` for the Uno R3 (16U2 instead of 8U2: correct bootloader address).
+- **Arduino Due** (SAM3X8E, ARM Cortex-M3, nativer USB-Port): komplett neue Firmware in `firmware_due/` (PlatformIO,
+  Arduino-SAM-Core), die Protokoll, Konfiguration, Ausgänge, Panel, Strip und DOF-COM-Port **unverändert aus
+  `firmware/` mitkompiliert**. Eigenes PluggableUSB-Modul mit drei HID-Schnittstellen und Gerätedeskriptor
+  (VID 0xFAFA, PID 0x00F0 + LED-Wiz-ID zur Laufzeit), Soft-PWM über TC3, Freilauf-ADC (12 Kanäle), EEPROM-Ersatz im
+  letzten Kilobyte von Flash-Bank 1, WS2811/WS2812-Treiber mit Zyklenzähler (bis 255 Pixel), 74 Pins (D0/D1 gesperrt),
+  Werksbelegung D22–D53. Befehl 66 startet den ROM-Bootloader SAM-BA. **Alle Pins 3,3 V.** Board-ID 6 im Tool.
+  **Testfunktion – ohne Hardware nicht geprüft.**
+  **Arduino Due** (SAM3X8E, native USB port): brand-new firmware in `firmware_due/` (PlatformIO, Arduino SAM core)
+  compiling the shared modules from `firmware/` unchanged; own PluggableUSB module (three HID interfaces, runtime
+  VID/PID), soft PWM via TC3, free-running ADC, EEPROM stand-in in flash bank 1, WS2812 driver with cycle counter
+  (up to 255 pixels), 74 pins, factory outputs D22–D53, command 66 enters SAM-BA. All pins 3.3 V. Untested on hardware.
+- Online-Flasher: **SAM-BA-Protokoll für den Due** über Web Serial (wie bossac: Chip-ID, Seiten in den Latch-Puffer,
+  EEFC „Erase page and write page“, Zurücklesen, Boot-Flag GPNVM1, Reset), 1200-Baud-Trick in den ROM-Bootloader,
+  rohe `.bin`-Dateien, Anleitungsabschnitt „Arduino Due“, 3,3-V-Warnung; Board, Hinweis, Warnkasten und Anleitung
+  sind sichtbar als **BETA** gekennzeichnet (auch Startseite und README). `release/arduino_due.bin` über `publish.sh`.
+  **Testfunktion – ohne Hardware nur im Headless-Browser geprüft.**
+  Web flasher: **SAM-BA protocol for the Due** via Web Serial (like bossac), 1200 baud touch into the ROM bootloader,
+  raw `.bin` files, guide section, 3.3 V warning. Untested on hardware.
 
 ### Verbessert / Improved
 - Repo-Aufbau: Webseite (Flasher, Konfigurations-Tool, Hex-Dateien) in `docs/`, gemeinsames `style.css`; der
@@ -51,6 +69,12 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
   per CMake (`win32/CMakeLists.txt`).
   Repo layout: web page in `docs/`, unchanged upstream snapshot in `old/`; `tools/lwcconfig-web/` is gone. The old
   Visual Studio project files now live only in `old/`; the DLL and tools are built with CMake.
+- Gemeinsame Module portabel gemacht: `pins.h` kapselt den Pin-Zugriff (`pins_read`/`pins_write`, AVR 8-Bit-Port oder
+  SAM PIO), `outputs_tick()` statt fest verdrahtetem Timer-Interrupt, ADC-Hooks (`ADC_select`/`ADC_read`) für Nicht-AVR;
+  AVR-Verhalten und -Größen unverändert.
+  Shared modules made portable (`pins_read`/`pins_write`, `outputs_tick()`, ADC hooks); AVR behaviour and sizes unchanged.
+- Konfigurations-Tool: Board „Arduino Due (3,3 V)“ mit 74 Pin-Namen; Pin-Bits bis 31 (ARM-Ports).
+  Configuration tool: board "Arduino Due (3.3 V)" with 74 pin names; pin bits up to 31 (ARM ports).
 - Die 32 LED-Wiz-Ausgänge sind wieder **reine GPIO-Ausgänge wie im Original** (`outputs.c` ohne Strip-Code);
   der Strip liest nur noch die Helligkeiten über `outputs_get_level()`.
   The 32 LED-Wiz outputs are plain GPIO outputs again like the original; the strip only reads their levels.

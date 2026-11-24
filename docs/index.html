@@ -40,7 +40,7 @@ a { color: var(--blue); }
     <a class="tile" href="flash.html">
       <span class="num">1</span>
       <h3 data-i18n="t1">Firmware flashen</h3>
-      <p data-i18n="t1p">Board wählen, Port oder DFU-Gerät wählen, fertig. Leonardo, Pro Micro, Uno, Mega 2560 und 32U2-Breakout – ohne avrdude oder FLIP.</p>
+      <p data-i18n="t1p">Board wählen, Port oder DFU-Gerät wählen, fertig. Leonardo, Pro Micro, Uno, Mega 2560, 32U2-Breakout und Arduino Due – ohne avrdude, FLIP oder bossac.</p>
       <span class="go" data-i18n="go1">Zum Flasher →</span>
     </a>
     <a class="tile" href="config.html">
@@ -69,6 +69,7 @@ a { color: var(--blue); }
       <li>Arduino Uno R1/R2 (ATmega328P + ATmega8U2)</li>
       <li>Arduino Mega 2560 (ATmega2560 + ATmega16U2)</li>
       <li>Breakout-Board ATmega32U2</li>
+      <li>Arduino Due (SAM3X8E, nativer USB-Port, 3,3 V) <small data-i18n="due_note">– BETA: eigene ARM-Firmware, gleiches Protokoll, noch ungetestet</small></li>
     </ul>
     <div class="hint" data-i18n="beta">Stand: Beta – die Firmware 2.1 ist übersetzt und geprüft, aber noch nicht an echter Hardware getestet. Rückmeldungen bitte als GitHub-Issue.</div>
   </div>
@@ -89,7 +90,7 @@ const I18N = {
   de: {
     subtitle:'LED-Wiz-Klon für Arduino', h:'Flashen und einrichten – direkt im Browser',
     p:'LWCloneU2 macht aus einem Arduino einen LED-Wiz-kompatiblen Ausgabetreiber mit 32 Ausgängen, Tastern, Joystick-Achsen und WS2811/WS2812-Strip. Firmware und Pin-Belegung kommen ohne Installation über Microsoft Edge oder Google Chrome auf das Board.',
-    t1:'Firmware flashen', t1p:'Board wählen, Port oder DFU-Gerät wählen, fertig. Leonardo, Pro Micro, Uno, Mega 2560 und 32U2-Breakout – ohne avrdude oder FLIP.', go1:'Zum Flasher →',
+    t1:'Firmware flashen', t1p:'Board wählen, Port oder DFU-Gerät wählen, fertig. Leonardo, Pro Micro, Uno, Mega 2560, 32U2-Breakout und Arduino Due – ohne avrdude, FLIP oder bossac.', due_note:'– BETA: eigene ARM-Firmware, gleiches Protokoll, noch ungetestet', go1:'Zum Flasher →',
     t2:'Konfigurieren', t2p:'Pins für Ausgänge, Taster und Achsen zuweisen, Joysticks kalibrieren, LED-Strip einrichten, Live-Anzeige – gespeichert im EEPROM des Boards.', go2:'Zum Konfigurations-Tool →',
     req:'Voraussetzungen',
     r1:'Microsoft Edge oder Google Chrome ab Version 89 auf Windows, macOS oder Linux (Firefox/Safari können keine USB-Geräte ansprechen).',
@@ -102,7 +103,7 @@ const I18N = {
   en: {
     subtitle:'LED-Wiz clone for Arduino', h:'Flash and configure – right in the browser',
     p:'LWCloneU2 turns an Arduino into an LED-Wiz compatible output controller with 32 outputs, buttons, joystick axes and a WS2811/WS2812 strip. Firmware and pin assignment reach the board through Microsoft Edge or Google Chrome, no installation needed.',
-    t1:'Flash firmware', t1p:'Pick the board, pick the port or DFU device, done. Leonardo, Pro Micro, Uno, Mega 2560 and the 32U2 breakout – without avrdude or FLIP.', go1:'Open the flasher →',
+    t1:'Flash firmware', t1p:'Pick the board, pick the port or DFU device, done. Leonardo, Pro Micro, Uno, Mega 2560, the 32U2 breakout and the Arduino Due – without avrdude, FLIP or bossac.', due_note:'– BETA: own ARM firmware, same protocol, untested so far', go1:'Open the flasher →',
     t2:'Configure', t2p:'Assign pins for outputs, buttons and axes, calibrate joysticks, set up the LED strip, live view – stored in the board’s EEPROM.', go2:'Open the configuration tool →',
     req:'Requirements',
     r1:'Microsoft Edge or Google Chrome version 89 or later on Windows, macOS or Linux (Firefox/Safari cannot access USB devices).',
