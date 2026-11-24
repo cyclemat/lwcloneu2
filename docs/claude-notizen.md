@@ -27,9 +27,20 @@ Stand: 24.11.2026
 - WS2812-Timing per Zyklen gerechnet (16 MHz: T0H 312 ns, T1H 812 ns; 8 MHz: 375/625 ns) – am Oszi prüfen.
 - Dual-Chip-Pfad (Uno/Mega: Antworten über UART mit Byte 0 ≥ 0xA0) ungetestet.
 
+## Gebaut und geprüft (24.11.2026)
+- `ledwiz.dll` x86 + x64 mit LLVM-MinGW 20261117 (Clang 23) → `win32/bin/x86|x64/` (nicht im Git, Build-Ausgabe).
+  7 Exporte undekoriert, Importe hid/setupapi/UCRT. testapp/lwcconfig (x86 + x64) je 3× ohne Gerät gestartet:
+  Exit 0, „no ledwiz devices detected!“. Vorher: x64-lwcconfig hing in FreeLibrary, testapp stürzte beim Beenden
+  ab → Ursache Thread-Erzeugung in DllMain; behoben durch Lazy-Start (Commit 94030a6). Ohne Gerät nicht weiter testbar.
+  Kuriosum: gepufferte stdout-Ausgabe von testapp ging beim Beenden verloren → stdout jetzt ungepuffert.
+- Firmware: `firmware/build.sh` erzeugt 7 Hex-Dateien in `firmware/build/`.
+- Webtool: Headless-Edge-Test – Skript läuft ohne Fehler, Oberfläche wird gerendert; WebHID ohne Gerät nicht testbar.
+- winget hing beim Quellen-Update → LLVM-MinGW als Zip nach `C:\lwclone\tools\` entpackt (nicht im Repo).
+
 ## Offen
-- DLL bauen (sobald LLVM-MinGW installiert) und Exporte prüfen; Firmware mit den LUFA-Makefiles bauen (make).
-- README DE/EN, Changelog, GitHub Actions (nur `workflow_dispatch`, Start nur auf Ansage).
+- An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno.
+- GitHub Actions nur `workflow_dispatch` – erster Lauf nach Push auf Ansage des Nutzers.
+- DLL braucht UCRT (Windows 10+; auf Windows 7 UCRT-Update). Für eine MSVC-DLL: CI-Workflow (windows-latest).
 - Webtool: Encoder-Eingänge werden nicht entprellt (wie Upstream), Joystick-Tasten 9–16 nicht vorgesehen.
 - Mögliche Erweiterungen: PWM-Hardwarekanäle, mehr als 32 Eingänge auf dem Mega (CFG_NUM_INPUTS pro Board),
   lwcconfig.exe mit Konfigurationsbefehlen.

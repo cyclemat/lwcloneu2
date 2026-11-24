@@ -28,6 +28,10 @@ All items **(Beta)**: compiled and reviewed, not yet tested on real hardware.
 
 ### Behoben / Fixed
 - `ledwiz.dll`: Hänger beim Prozessende – `DllMain` wartete auf den I/O-Thread, der beim Beenden schon beendet war.
+- `ledwiz.dll`: Hänger bzw. Absturz bei `FreeLibrary` kurz nach `LoadLibrary` – der I/O-Thread wurde in `DllMain`
+  erzeugt und konnte wegen des Loader-Locks noch nicht laufen. Er startet jetzt beim ersten API-Aufruf.
+- `ledwiz.dll`/Tools: bauen jetzt auch mit Clang/MinGW (Aufrufkonventionen, Signaturen von `LWZ_RAWWRITE`/`LWZ_RAWREAD`
+  passend zum Header, saubere `GetProcAddress`-Casts).
 - `ledwiz.dll`: Event-Handle `heevent` wurde nie geschlossen; Geräteliste beim Entfernen falsch gepflegt;
   `LWZ_SET_NOTIFY_EX` räumte vorherige Registrierung nicht auf.
 - Firmware: ADC-Wandlung startet erst, wenn Achsen konfiguriert sind; Pins werden beim Umkonfigurieren freigegeben.

@@ -162,12 +162,20 @@ static DWORD WINAPI MyThreadProc(LPVOID lpParameter)
 		wx.lpszClassName = "LWCloneU2";
 
 		if (!RegisterClassExA(&wx))
+		{
+			printf("RegisterClassEx failed, error %lu\n", GetLastError());
 			goto Failed;
+		}
 
 		HWND hwnd = CreateWindowExA(0, wx.lpszClassName, "LWCloneU2 TestApp Hidden Window", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, NULL, NULL);
 
 		if (hwnd == NULL)
+		{
+			// also the normal exit when no device was found (the window destroys itself in WM_CREATE)
+			if (g_main.devlist.numdevices > 0)
+				printf("CreateWindowEx failed, error %lu\n", GetLastError());
 			goto Failed;
+		}
 	}
 
 	// set the console handler to handle the crtl-c and exit clicks
@@ -199,6 +207,11 @@ Failed:
 
 int main(int argc, char* argv[])
 {
+	(void)argc; (void)argv;
+
+	// print immediately, also when the output is redirected
+	setvbuf(stdout, NULL, _IONBF, 0);
+
 	// create a worker thread (for creating a hidden window) and wait until it exits
 
 	g_main.hthread = CreateThread(NULL, 0, MyThreadProc, NULL, 0, NULL);
@@ -208,4 +221,6 @@ int main(int argc, char* argv[])
 
 	WaitForSingleObject(g_main.hthread, INFINITE);
 	CloseHandle(g_main.hthread);
+
+	return 0;
 }
