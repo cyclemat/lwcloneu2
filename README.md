@@ -70,8 +70,9 @@ Aufruf aus der Git-Bash).
 
 ```sh
 cd firmware
-make                      # alle Boards
-make -C arduino_leonardo  # ein Board; Ergebnis: arduino_leonardo/arduino_leonardo.hex
+./build.sh                # alle Boards ohne make (nur avr-gcc); Ergebnis: firmware/build/*.hex, Protokoll build.log
+./build.sh leonardo       # ein Board (leonardo, promicro, breakout_32u2, mega2560, uno)
+make                      # alternativ mit den LUFA-Makefiles (Linux); Ergebnis: <board>/<board>.hex
 ```
 
 ### Windows-DLL und Tools
@@ -157,7 +158,8 @@ The tool uses WebHID over the same USB HID connection the LED-Wiz software uses 
 Protocol: [`firmware/proto.h`](firmware/proto.h), data layout: [`firmware/config.h`](firmware/config.h).
 
 ## Building
-Firmware: `avr-gcc`, `avr-libc`, `make` → `cd firmware && make` (all boards) or `make -C arduino_leonardo`.
+Firmware: `avr-gcc` + `avr-libc` → `cd firmware && ./build.sh` (all boards, no make needed, output in `firmware/build/`)
+or `make` with the LUFA makefiles.
 Windows: `cmake -S win32 -B build-x86 -A Win32 && cmake --build build-x86 --config Release` (MSVC) or with
 LLVM-MinGW/MinGW-w64 via `-G Ninja -DCMAKE_CXX_COMPILER=...`. Output in `win32/bin/<arch>/`.
 
