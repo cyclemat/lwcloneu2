@@ -131,6 +131,9 @@ Stand: 24.11.2026
   Nicht an Hardware getestet; Risiken: W-Durchsatz des ROM-Monitors, Latch-Schreiben per Einzelwort (bossac nutzt
   WordCopy-Applet – laut Datenblatt reichen 32-Bit-Schreibzugriffe).
 - Tool: BOARDS[6] (74 Namen), `bit: b & 0x7F`. publish.sh kopiert `arduino_due.bin`; Workflow-Job `due` (pio).
+- Nutzer 24.11.2026: „als Beta beschreiben, auch in der README“ → BETA sichtbar in Flasher (Option, Hinweis,
+  Warnkasten `warn_due_beta`, Anleitung g_d8), Startseite, README (Tabelle, Absätze, Flasher-Abschnitt, Schnellstart
+  mit bossac). Commit accb4c8, gepusht am 24.11.2026 („speicher mal alles“).
 
 ## Offen
 - An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno,
