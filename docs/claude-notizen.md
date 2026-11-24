@@ -35,7 +35,7 @@ Stand: 24.11.2026
   Kuriosum: gepufferte stdout-Ausgabe von testapp ging beim Beenden verloren → stdout jetzt ungepuffert.
 - Firmware: `firmware/build.sh` erzeugt 7 Hex-Dateien in `firmware/build/`.
 - Webtool: Headless-Edge-Test – Skript läuft ohne Fehler, Oberfläche wird gerendert; WebHID ohne Gerät nicht testbar.
-- winget hing beim Quellen-Update → LLVM-MinGW als Zip nach `C:\lwclone\tools\` entpackt (nicht im Repo).
+- winget hing beim Quellen-Update → LLVM-MinGW als Zip lokal entpackt (nicht im Repo).
 
 ## Offen
 - An Hardware testen: USB-Enumeration (3 HID-Schnittstellen), WS2812-Timing (Oszi), ADC-Achsen, Brückenmodus Mega/Uno.
